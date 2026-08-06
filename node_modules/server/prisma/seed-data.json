@@ -1,0 +1,326 @@
+{
+  "exportedAt": "2026-08-03T09:08:11.485Z",
+  "users": [
+    {
+      "id": "cmscx7bpw0000vgxo1it83kah",
+      "username": "admin",
+      "email": "admin@wiki.local",
+      "name": "Admin User",
+      "passwordHash": "$2b$10$WAGoj1e3YpoY6ntQDeXTBuBmZLlTOxLbJ9nl.XsYZ3CW7Gs9y7.7O",
+      "role": "ADMIN",
+      "avatarUrl": null,
+      "createdAt": "2026-08-03T07:41:18.741Z",
+      "updatedAt": "2026-08-03T07:41:18.741Z"
+    },
+    {
+      "id": "cmscx7bq70001vgxoq7phsbij",
+      "username": "editor",
+      "email": "editor@wiki.local",
+      "name": "Editor User",
+      "passwordHash": "$2b$10$tHDXmbqzKM2TdSVZrZE3nOs3oFAOg1ltwhTtkQ1cD5su3PZobmXnS",
+      "role": "EDITOR",
+      "avatarUrl": null,
+      "createdAt": "2026-08-03T07:41:18.751Z",
+      "updatedAt": "2026-08-03T07:41:18.751Z"
+    },
+    {
+      "id": "cmscx7bq80002vgxoqb3nuga7",
+      "username": "viewer",
+      "email": "viewer@wiki.local",
+      "name": "Viewer User",
+      "passwordHash": "$2b$10$9/rSIGQnDufvXP9qaYj0j.NYTuxcDZvCvC.z9um4tGg0VNWCOL30G",
+      "role": "VIEWER",
+      "avatarUrl": null,
+      "createdAt": "2026-08-03T07:41:18.752Z",
+      "updatedAt": "2026-08-03T07:41:18.752Z"
+    },
+    {
+      "id": "cmscy2gu60000vg00yv5wmljq",
+      "username": "maymonhnin",
+      "email": "maymonhnin1000@gmail.com",
+      "name": "May Mon Hnin",
+      "passwordHash": "$2b$10$fE58DKesuiB1/.uOrXWXA.OQVNY.zwjC2RHsTgMj.IDmjYuDf80Su",
+      "role": "ADMIN",
+      "avatarUrl": null,
+      "createdAt": "2026-08-03T08:05:31.708Z",
+      "updatedAt": "2026-08-03T08:05:31.708Z"
+    },
+    {
+      "id": "cmscy3jh80003vg004k79qs82",
+      "username": "nyinyilin",
+      "email": "nyi2lin@gmail.com",
+      "name": "Nyi Nyi Lin",
+      "passwordHash": "$2b$10$qCznDTeVHBy65DTK4s6jte.Zdvoqf5ohTlFL795WwcejG0enPysG2",
+      "role": "ADMIN",
+      "avatarUrl": null,
+      "createdAt": "2026-08-03T08:06:21.788Z",
+      "updatedAt": "2026-08-03T08:06:21.788Z"
+    },
+    {
+      "id": "cmscy458l0006vg0058mx0ew6",
+      "username": "hsuyizaw",
+      "email": null,
+      "name": "Hsu Yi Zaw",
+      "passwordHash": "$2b$10$CLutP1EYKQmuRNpPAfd66.Y3cLSmeYY7ytsRdoalcPvBcYioyUPgK",
+      "role": "EDITOR",
+      "avatarUrl": null,
+      "createdAt": "2026-08-03T08:06:49.990Z",
+      "updatedAt": "2026-08-03T08:06:49.990Z"
+    },
+    {
+      "id": "cmscy4pek0009vg004wg5mude",
+      "username": "wintwinthtae",
+      "email": null,
+      "name": "Wint Wint Htae",
+      "passwordHash": "$2b$10$sy4pAi8icxPKi2q0MX8U/u5D6k4Fw90Y/Ix3eURjabHhNbaBr5r/C",
+      "role": "EDITOR",
+      "avatarUrl": null,
+      "createdAt": "2026-08-03T08:07:16.125Z",
+      "updatedAt": "2026-08-03T08:07:16.125Z"
+    },
+    {
+      "id": "cmscy5kc5000cvg0079v090yx",
+      "username": "heinhtetzaw",
+      "email": null,
+      "name": "Hein Htet Zaw",
+      "passwordHash": "$2b$10$yN9rTkcfMxhk4T2JFZA25exm0ggHxhmvao5/PbwnxhId2IQiQGqwW",
+      "role": "EDITOR",
+      "avatarUrl": null,
+      "createdAt": "2026-08-03T08:07:56.213Z",
+      "updatedAt": "2026-08-03T08:07:56.213Z"
+    },
+    {
+      "id": "cmscy69ei000fvg00b1586dvi",
+      "username": "viewer01",
+      "email": null,
+      "name": "Viewer 01",
+      "passwordHash": "$2b$10$ESWSV86jwH.pFUeF.Ir1K.yyd9WovskrItEgPV88RVZgV/8r..2fO",
+      "role": "VIEWER",
+      "avatarUrl": null,
+      "createdAt": "2026-08-03T08:08:28.698Z",
+      "updatedAt": "2026-08-03T08:08:28.698Z"
+    }
+  ],
+  "groups": [
+    {
+      "id": "cmscx7bq90003vgxox77wdn7o",
+      "name": "Writers",
+      "description": "Can create and edit manual pages",
+      "createdAt": "2026-08-03T07:41:18.753Z"
+    },
+    {
+      "id": "cmscx7bqd0007vgxox22iyl10",
+      "name": "Readers",
+      "description": "Read-only access to published manuals",
+      "createdAt": "2026-08-03T07:41:18.757Z"
+    }
+  ],
+  "groupMembers": [
+    {
+      "id": "cmscx7bq90005vgxoeaaxelgk",
+      "userId": "cmscx7bq70001vgxoq7phsbij",
+      "groupId": "cmscx7bq90003vgxox77wdn7o"
+    },
+    {
+      "id": "cmscx7bq90006vgxogdri9kz7",
+      "userId": "cmscx7bpw0000vgxo1it83kah",
+      "groupId": "cmscx7bq90003vgxox77wdn7o"
+    },
+    {
+      "id": "cmscx7bqd0009vgxoz5d55lxm",
+      "userId": "cmscx7bq80002vgxoqb3nuga7",
+      "groupId": "cmscx7bqd0007vgxox22iyl10"
+    },
+    {
+      "id": "cmscy2gug0002vg00deszfleo",
+      "userId": "cmscy2gu60000vg00yv5wmljq",
+      "groupId": "cmscx7bq90003vgxox77wdn7o"
+    },
+    {
+      "id": "cmscy3jh80005vg00ngv2pxhw",
+      "userId": "cmscy3jh80003vg004k79qs82",
+      "groupId": "cmscx7bq90003vgxox77wdn7o"
+    },
+    {
+      "id": "cmscy458m0008vg00llksm8zx",
+      "userId": "cmscy458l0006vg0058mx0ew6",
+      "groupId": "cmscx7bq90003vgxox77wdn7o"
+    },
+    {
+      "id": "cmscy4pek000bvg000sezvh5z",
+      "userId": "cmscy4pek0009vg004wg5mude",
+      "groupId": "cmscx7bq90003vgxox77wdn7o"
+    },
+    {
+      "id": "cmscy5kc5000evg009ognbtxz",
+      "userId": "cmscy5kc5000cvg0079v090yx",
+      "groupId": "cmscx7bq90003vgxox77wdn7o"
+    },
+    {
+      "id": "cmscy69ej000hvg002lkvux91",
+      "userId": "cmscy69ei000fvg00b1586dvi",
+      "groupId": "cmscx7bqd0007vgxox22iyl10"
+    }
+  ],
+  "spaces": [
+    {
+      "id": "cmscx7bqg000avgxoffz6zcqy",
+      "name": "Admin Handbook",
+      "slug": "admin-handbook",
+      "description": "Onboarding and steps for Mplus Wiki Admin roles",
+      "icon": "book",
+      "isPrivate": false,
+      "createdAt": "2026-08-03T07:41:18.760Z",
+      "updatedAt": "2026-08-03T08:10:40.730Z"
+    },
+    {
+      "id": "cmscx7bqk000fvgxos9bsb5nr",
+      "name": "Product Guide",
+      "slug": "product-guide",
+      "description": "Core features and workflows",
+      "icon": "book",
+      "isPrivate": false,
+      "createdAt": "2026-08-03T07:41:18.765Z",
+      "updatedAt": "2026-08-03T07:41:18.765Z"
+    }
+  ],
+  "spaceMembers": [
+    {
+      "id": "cmscx7bqg000cvgxoxhpbsqzc",
+      "spaceId": "cmscx7bqg000avgxoffz6zcqy",
+      "userId": "cmscx7bpw0000vgxo1it83kah",
+      "groupId": null,
+      "level": "MANAGE"
+    },
+    {
+      "id": "cmscx7bqg000dvgxo5g8nkq2a",
+      "spaceId": "cmscx7bqg000avgxoffz6zcqy",
+      "userId": null,
+      "groupId": "cmscx7bq90003vgxox77wdn7o",
+      "level": "EDIT"
+    },
+    {
+      "id": "cmscx7bqg000evgxoyfeoybbl",
+      "spaceId": "cmscx7bqg000avgxoffz6zcqy",
+      "userId": null,
+      "groupId": "cmscx7bqd0007vgxox22iyl10",
+      "level": "VIEW"
+    },
+    {
+      "id": "cmscx7bqk000hvgxoaa71fsf9",
+      "spaceId": "cmscx7bqk000fvgxos9bsb5nr",
+      "userId": "cmscx7bpw0000vgxo1it83kah",
+      "groupId": null,
+      "level": "MANAGE"
+    },
+    {
+      "id": "cmscx7bqk000ivgxonc4jd8os",
+      "spaceId": "cmscx7bqk000fvgxos9bsb5nr",
+      "userId": null,
+      "groupId": "cmscx7bq90003vgxox77wdn7o",
+      "level": "EDIT"
+    },
+    {
+      "id": "cmscx7bqk000jvgxovsycz0m6",
+      "spaceId": "cmscx7bqk000fvgxos9bsb5nr",
+      "userId": null,
+      "groupId": "cmscx7bqd0007vgxox22iyl10",
+      "level": "VIEW"
+    }
+  ],
+  "pages": [
+    {
+      "id": "cmscx7bqq000ovgxok0b64dpt",
+      "spaceId": "cmscx7bqg000avgxoffz6zcqy",
+      "parentId": null,
+      "title": "Welcome",
+      "slug": "welcome",
+      "content": "# Welcome to Mplus Admin UserManual Wiki\n\nThis is a **sample frame** for your wiki-style user manual page. \n\n\n## Features in System as a Admin \n\n- Organize docs into **Spaces** (like Docmost / Confluence)\n- Nest pages in a sidebar tree\n- Switch editors per page: Markdown, WYSIWYG, or HTML\n- Control access with roles, groups, and page permissions\n- Toggle light / dark mode\n\n\n## Features in System as a Editor\n\n- Create/Edit/Preview/Publish page in existing Spaces\n- Switch editors per page: Markdown, WYSIWYG, or HTML\n- Toggle light / dark mode\n\n\n## Features in System as a Viewer\n\n- View pages in all Spaces\n- Toggle light / dark mode\n\n\n## Demo accounts\n\n| Role   | Username | Password   |\n|--------|----------|------------| \n| Editor | editor   | editor123  |\n| Viewer | viewer   | viewer123  |\n",
+      "editorType": "MARKDOWN",
+      "published": true,
+      "order": 0,
+      "authorId": "cmscx7bpw0000vgxo1it83kah",
+      "createdAt": "2026-08-03T07:41:18.771Z",
+      "updatedAt": "2026-08-03T08:17:31.741Z"
+    },
+    {
+      "id": "cmscx7bqt000qvgxougfcqjv2",
+      "spaceId": "cmscx7bqg000avgxoffz6zcqy",
+      "parentId": "cmscx7bqq000ovgxok0b64dpt",
+      "title": "Quick Start",
+      "slug": "quick-start",
+      "content": "# Quick Start\n\n1. Sign in as admin/editor role\n2. Create/Open a Space\n3. Add nested pages\n4. Publish for readers\n\nYou as Admin/ Editor can customize page later with your desired editor format.\n",
+      "editorType": "MARKDOWN",
+      "published": true,
+      "order": 0,
+      "authorId": "cmscx7bpw0000vgxo1it83kah",
+      "createdAt": "2026-08-03T07:41:18.773Z",
+      "updatedAt": "2026-08-03T08:13:03.769Z"
+    },
+    {
+      "id": "cmscx7bqu000svgxoeiqrl92w",
+      "spaceId": "cmscx7bqg000avgxoffz6zcqy",
+      "parentId": null,
+      "title": "Installation",
+      "slug": "installation",
+      "content": "# Project Installation\n\nInstallation guide.\n\n```bash\ndocker compose up -d\nnpm install\nnpm run db:push\nnpm run db:seed\nnpm run dev\n```\n",
+      "editorType": "MARKDOWN",
+      "published": true,
+      "order": 1,
+      "authorId": "cmscx7bq70001vgxoq7phsbij",
+      "createdAt": "2026-08-03T07:41:18.775Z",
+      "updatedAt": "2026-08-03T08:17:56.160Z"
+    },
+    {
+      "id": "cmscx7bqw000uvgxoc1axlvff",
+      "spaceId": "cmscx7bqk000fvgxos9bsb5nr",
+      "parentId": null,
+      "title": "Features Overview",
+      "slug": "features",
+      "content": "<p>Mplus User Permission</p>",
+      "editorType": "WYSIWYG",
+      "published": true,
+      "order": 0,
+      "authorId": "cmscx7bpw0000vgxo1it83kah",
+      "createdAt": "2026-08-03T07:41:18.776Z",
+      "updatedAt": "2026-08-03T08:11:22.345Z"
+    },
+    {
+      "id": "cmscx7bqx000wvgxouaaqbdhc",
+      "spaceId": "cmscx7bqk000fvgxos9bsb5nr",
+      "parentId": "cmscx7bqw000uvgxoc1axlvff",
+      "title": "Permissions",
+      "slug": "permissions",
+      "content": "<p><strong>Mplus User Permissions</strong></p><img class=\"rounded-md max-w-full h-auto\" src=\"/uploads/1785746621407-iv2jr8i6.png\" alt=\"mhn_logo_png.png\"><p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://maharnet.com/\">https://maharnet.com/</a></p><img class=\"rounded-md max-w-full h-auto\" src=\"/uploads/1785746699377-a70vawlt.jpg\" alt=\"nature.jpg\"><p></p>",
+      "editorType": "WYSIWYG",
+      "published": true,
+      "order": 0,
+      "authorId": "cmscx7bpw0000vgxo1it83kah",
+      "createdAt": "2026-08-03T07:41:18.778Z",
+      "updatedAt": "2026-08-03T08:45:02.533Z"
+    }
+  ],
+  "pagePermissions": [],
+  "settings": [
+    {
+      "id": "cmscx7br00012vgxorxtplb5v",
+      "key": "allowRegistration",
+      "value": "false"
+    },
+    {
+      "id": "cmscx7br00011vgxolsuvjxjj",
+      "key": "defaultEditor",
+      "value": "MARKDOWN"
+    },
+    {
+      "id": "cmscx7br0000zvgxocje9ohbz",
+      "key": "siteName",
+      "value": "MHN Wiki"
+    },
+    {
+      "id": "cmscx7br00010vgxoz2tc7f7q",
+      "key": "siteTagline",
+      "value": "Mahar NET user manual"
+    }
+  ]
+}
