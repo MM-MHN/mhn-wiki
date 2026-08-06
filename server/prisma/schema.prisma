@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum EditorType {
+  MARKDOWN
+  WYSIWYG
+  HTML
+}
+
+enum PermissionLevel {
+  NONE
+  VIEW
+  EDIT
+  MANAGE
+}
+
+model User {
+  id           String         @id @default(cuid())
+  username     String         @unique
+  email        String?        @unique
+  name         String
+  passwordHash String
+  role         Role           @default(VIEWER)
+  avatarUrl    String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  groupMembers GroupMember[]
+  pages        Page[]         @relation("PageAuthor")
+  pagePerms    PagePermission[]
+  spaceMembers SpaceMember[]
+}
+
+model Group {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  members     GroupMember[]
+  pagePerms   PagePermission[]
+  spaceMembers SpaceMember[]
+}
+
+model GroupMember {
+  id      String @id @default(cuid())
+  userId  String
+  groupId String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+}
+
+model Space {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  description String?
+  icon        String?
+  isPrivate   Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  pages       Page[]
+  members     SpaceMember[]
+}
+
+model SpaceMember {
+  id        String          @id @default(cuid())
+  spaceId   String
+  userId    String?
+  groupId   String?
+  level     PermissionLevel @default(VIEW)
+  space     Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user      User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     Group?          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+}
+
+model Page {
+  id          String           @id @default(cuid())
+  spaceId     String
+  parentId    String?
+  title       String
+  slug        String
+  content     String           @default("")
+  editorType  EditorType       @default(MARKDOWN)
+  published   Boolean          @default(true)
+  order       Int              @default(0)
+  authorId    String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  space       Space            @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parent      Page?            @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Page[]           @relation("PageTree")
+  author      User?            @relation("PageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  permissions PagePermission[]
+
+  @@unique([spaceId, slug])
+  @@index([spaceId, parentId])
+}
+
+model PagePermission {
+  id      String          @id @default(cuid())
+  pageId  String
+  userId  String?
+  groupId String?
+  level   PermissionLevel @default(VIEW)
+  page    Page            @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  user    User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group   Group?          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
