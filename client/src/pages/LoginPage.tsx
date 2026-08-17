@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,12 +15,19 @@ import { useAuth } from "@/context/auth";
 export function LoginPage() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const location = useLocation();
+  const from =
+    (location.state as { from?: string } | null)?.from &&
+    (location.state as { from?: string }).from !== "/login"
+      ? (location.state as { from: string }).from
+      : "/";
+
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={from} replace />;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -28,7 +35,7 @@ export function LoginPage() {
     setError("");
     try {
       await login(username.trim(), password);
-      navigate("/");
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -37,17 +44,17 @@ export function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-md items-center px-4 py-10">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md items-center px-4 py-8 sm:py-10">
       <Card className="w-full">
         <CardHeader className="items-center text-center">
           <img
             src="/brand/logo.png"
             alt="Mahar NET"
-            className="mb-2 h-20 w-auto max-w-[240px] object-contain"
+            className="mb-2 h-14 w-auto max-w-[min(240px,70vw)] object-contain sm:h-20"
           />
           <CardTitle className="font-serif text-2xl">Sign in</CardTitle>
           <CardDescription>
-            Sign in with your username and password.
+            Sign in required to view spaces and pages.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -80,12 +87,6 @@ export function LoginPage() {
               {loading ? "Signing in…" : "Sign in"}
             </Button>
           </form>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Demo: admin / admin123 —{" "}
-            <Link to="/" className="underline">
-              back home
-            </Link>
-          </p>
         </CardContent>
       </Card>
     </main>

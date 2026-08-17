@@ -1,9 +1,10 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { Role } from "@prisma/client";
+import { PermissionLevel, Role, SystemLogCategory } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { param } from "../lib/params.js";
+import { actorFromRequest, logSystemEvent } from "../lib/systemLog.js";
 import { AppError, asyncHandler } from "../middleware/error.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
@@ -49,6 +50,46 @@ adminRouter.get(
       prisma.page.count(),
     ]);
     res.json({ stats: { users, groups, spaces, pages } });
+  })
+);
+
+adminRouter.get(
+  "/logs",
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({
+        category: z.nativeEnum(SystemLogCategory).optional(),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+        offset: z.coerce.number().int().min(0).default(0),
+        q: z.string().optional(),
+      })
+      .parse(req.query);
+
+    const where = {
+      ...(query.category ? { category: query.category } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { message: { contains: query.q, mode: "insensitive" as const } },
+              { targetLabel: { contains: query.q, mode: "insensitive" as const } },
+              { actorName: { contains: query.q, mode: "insensitive" as const } },
+              { action: { contains: query.q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [logs, total] = await Promise.all([
+      prisma.systemLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: query.limit,
+        skip: query.offset,
+      }),
+      prisma.systemLog.count({ where }),
+    ]);
+
+    res.json({ logs, total, limit: query.limit, offset: query.offset });
   })
 );
 
@@ -99,6 +140,13 @@ adminRouter.post(
           : undefined,
       },
       select: userSelect,
+    });
+    logSystemEvent({
+      category: "USER",
+      action: "user.created",
+      message: `Created user “${user.name}” (@${user.username}) as ${user.role}`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "user", id: user.id, label: user.name },
     });
     res.status(201).json({ user });
   })
@@ -173,6 +221,15 @@ adminRouter.patch(
       });
     });
 
+    logSystemEvent({
+      category: "USER",
+      action: "user.updated",
+      message: `Updated user “${user.name}” (@${user.username})`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "user", id: user.id, label: user.name },
+      metadata: { role: user.role },
+    });
+
     res.json({ user });
   })
 );
@@ -196,6 +253,15 @@ adminRouter.delete(
     }
 
     await prisma.user.delete({ where: { id } });
+
+    logSystemEvent({
+      category: "USER",
+      action: "user.deleted",
+      message: `Deleted user “${existing.name}” (@${existing.username})`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "user", id: existing.id, label: existing.name },
+    });
+
     res.status(204).send();
   })
 );
@@ -234,6 +300,13 @@ adminRouter.post(
           : undefined,
       },
       include: groupInclude,
+    });
+    logSystemEvent({
+      category: "GROUP",
+      action: "group.created",
+      message: `Created group “${group.name}”`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "group", id: group.id, label: group.name },
     });
     res.status(201).json({ group });
   })
@@ -280,6 +353,14 @@ adminRouter.patch(
       });
     });
 
+    logSystemEvent({
+      category: "GROUP",
+      action: "group.updated",
+      message: `Updated group “${group.name}”`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "group", id: group.id, label: group.name },
+    });
+
     res.json({ group });
   })
 );
@@ -291,9 +372,23 @@ adminRouter.delete(
     const existing = await prisma.group.findUnique({ where: { id } });
     if (!existing) throw new AppError(404, "Group not found");
     await prisma.group.delete({ where: { id } });
+
+    logSystemEvent({
+      category: "GROUP",
+      action: "group.deleted",
+      message: `Deleted group “${existing.name}”`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "group", id: existing.id, label: existing.name },
+    });
+
     res.status(204).send();
   })
 );
+
+const spaceMemberInclude = {
+  user: { select: { id: true, name: true, username: true, role: true } },
+  group: { select: { id: true, name: true } },
+} as const;
 
 adminRouter.get(
   "/spaces",
@@ -302,6 +397,10 @@ adminRouter.get(
       orderBy: { name: "asc" },
       include: {
         _count: { select: { pages: true, members: true } },
+        members: {
+          include: spaceMemberInclude,
+          orderBy: { id: "asc" },
+        },
         pages: {
           orderBy: [{ order: "asc" }, { title: "asc" }],
           select: {
@@ -317,5 +416,162 @@ adminRouter.get(
       },
     });
     res.json({ spaces });
+  })
+);
+
+adminRouter.get(
+  "/spaces/:id/members",
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const space = await prisma.space.findUnique({ where: { id } });
+    if (!space) throw new AppError(404, "Space not found");
+
+    const members = await prisma.spaceMember.findMany({
+      where: { spaceId: id },
+      include: spaceMemberInclude,
+      orderBy: { id: "asc" },
+    });
+    res.json({ members });
+  })
+);
+
+const spaceMemberSchema = z
+  .object({
+    userId: z.string().optional(),
+    groupId: z.string().optional(),
+    level: z.nativeEnum(PermissionLevel).default(PermissionLevel.VIEW),
+  })
+  .refine((d) => Boolean(d.userId) !== Boolean(d.groupId), {
+    message: "Provide exactly one of userId or groupId",
+  });
+
+adminRouter.post(
+  "/spaces/:id/members",
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const body = spaceMemberSchema.parse(req.body);
+
+    const space = await prisma.space.findUnique({ where: { id } });
+    if (!space) throw new AppError(404, "Space not found");
+
+    if (body.userId) {
+      const user = await prisma.user.findUnique({ where: { id: body.userId } });
+      if (!user) throw new AppError(404, "User not found");
+      const existing = await prisma.spaceMember.findFirst({
+        where: { spaceId: id, userId: body.userId },
+      });
+      if (existing) throw new AppError(409, "User already has access to this space");
+    }
+
+    if (body.groupId) {
+      const group = await prisma.group.findUnique({
+        where: { id: body.groupId },
+      });
+      if (!group) throw new AppError(404, "Group not found");
+      const existing = await prisma.spaceMember.findFirst({
+        where: { spaceId: id, groupId: body.groupId },
+      });
+      if (existing) throw new AppError(409, "Group already has access to this space");
+    }
+
+    const member = await prisma.spaceMember.create({
+      data: {
+        spaceId: id,
+        userId: body.userId ?? null,
+        groupId: body.groupId ?? null,
+        level: body.level,
+      },
+      include: spaceMemberInclude,
+    });
+
+    const subject =
+      member.user?.name ?? member.group?.name ?? "member";
+    logSystemEvent({
+      category: "ACCESS",
+      action: "space.access.granted",
+      message: `Granted ${body.level} on “${space.name}” to ${subject}`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "space", id: space.id, label: space.name },
+      metadata: {
+        memberId: member.id,
+        level: body.level,
+        userId: body.userId,
+        groupId: body.groupId,
+      },
+    });
+
+    res.status(201).json({ member });
+  })
+);
+
+adminRouter.patch(
+  "/spaces/:spaceId/members/:memberId",
+  asyncHandler(async (req, res) => {
+    const spaceId = param(req, "spaceId");
+    const memberId = param(req, "memberId");
+    const body = z
+      .object({ level: z.nativeEnum(PermissionLevel) })
+      .parse(req.body);
+
+    const existing = await prisma.spaceMember.findFirst({
+      where: { id: memberId, spaceId },
+      include: { space: true, user: true, group: true },
+    });
+    if (!existing) throw new AppError(404, "Space member not found");
+
+    const member = await prisma.spaceMember.update({
+      where: { id: memberId },
+      data: { level: body.level },
+      include: spaceMemberInclude,
+    });
+
+    const subject =
+      member.user?.name ?? member.group?.name ?? "member";
+    logSystemEvent({
+      category: "ACCESS",
+      action: "space.access.updated",
+      message: `Changed access on “${existing.space.name}” for ${subject} to ${body.level}`,
+      actor: actorFromRequest(req.user!),
+      target: {
+        type: "space",
+        id: existing.space.id,
+        label: existing.space.name,
+      },
+      metadata: { memberId, level: body.level },
+    });
+
+    res.json({ member });
+  })
+);
+
+adminRouter.delete(
+  "/spaces/:spaceId/members/:memberId",
+  asyncHandler(async (req, res) => {
+    const spaceId = param(req, "spaceId");
+    const memberId = param(req, "memberId");
+
+    const existing = await prisma.spaceMember.findFirst({
+      where: { id: memberId, spaceId },
+      include: { space: true, user: true, group: true },
+    });
+    if (!existing) throw new AppError(404, "Space member not found");
+
+    await prisma.spaceMember.delete({ where: { id: memberId } });
+
+    const subject = existing.user?.name ?? existing.group?.name ?? "member";
+    logSystemEvent({
+      category: "ACCESS",
+      action: "space.access.revoked",
+      message: `Revoked access on “${existing.space.name}” from ${subject}`,
+      actor: actorFromRequest(req.user!),
+      target: {
+        type: "space",
+        id: existing.space.id,
+        label: existing.space.name,
+      },
+      metadata: { memberId },
+    });
+
+    res.status(204).send();
   })
 );

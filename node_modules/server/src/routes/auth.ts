@@ -2,6 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { actorFromRequest, logSystemEvent } from "../lib/systemLog.js";
 import { AppError, asyncHandler } from "../middleware/error.js";
 import { requireAuth, signToken, toAuthUser } from "../middleware/auth.js";
 
@@ -30,6 +31,12 @@ authRouter.post(
     if (!ok) throw new AppError(401, "Invalid username or password");
 
     const authUser = toAuthUser(user);
+    logSystemEvent({
+      category: "AUTH",
+      action: "auth.login",
+      message: `${authUser.name} (@${authUser.username}) signed in`,
+      actor: actorFromRequest(authUser),
+    });
     res.json({
       token: signToken(authUser),
       user: authUser,

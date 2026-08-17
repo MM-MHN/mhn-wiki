@@ -7,7 +7,8 @@ import {
   type FormEvent,
 } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { Eye, ExternalLink, Pencil } from "lucide-react";
+import { Eye, ExternalLink, History, Pencil } from "lucide-react";
+import { PageHistoryPanel } from "@/components/PageHistoryPanel";
 import { PageRenderer } from "@/components/PageRenderer";
 import { WysiwygEditor } from "@/components/WysiwygEditor";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { useAuth } from "@/context/auth";
 import { api, type EditorType, type Page, type Space } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type PanelMode = "edit" | "preview";
+type PanelMode = "edit" | "preview" | "history";
 
 export function AdminContentPage() {
   const { user, loading } = useAuth();
@@ -42,9 +43,10 @@ export function AdminContentPage() {
 
   const canAccess = user?.role === "ADMIN" || user?.role === "EDITOR";
   const editParam = params.get("edit");
+  const viewParam = params.get("view");
 
   const fillForm = useCallback(
-    (page: Page, options?: { showPreview?: boolean }) => {
+    (page: Page, options?: { showPreview?: boolean; showHistory?: boolean }) => {
       setEditingId(page.id);
       setSpaceId(page.spaceId);
       setTitle(page.title);
@@ -55,20 +57,20 @@ export function AdminContentPage() {
       setEditorKey((k) => k + 1);
       setMessage("");
       setError("");
-      loadedEditRef.current = page.id;
-      if (options?.showPreview) setPanelMode("preview");
+      if (options?.showHistory) setPanelMode("history");
+      else if (options?.showPreview) setPanelMode("preview");
     },
     []
   );
 
   const loadPageForEdit = useCallback(
-    async (pageId: string) => {
+    async (pageId: string, options?: { showHistory?: boolean }) => {
       setLoadingPage(true);
       setError("");
-      setPanelMode("edit");
+      if (!options?.showHistory) setPanelMode("edit");
       try {
         const { page } = await api.getPage(pageId);
-        fillForm(page);
+        fillForm(page, { showHistory: options?.showHistory });
       } catch (err) {
         loadedEditRef.current = null;
         setError(err instanceof Error ? err.message : "Failed to load page");
@@ -81,13 +83,21 @@ export function AdminContentPage() {
 
   async function loadSpaces() {
     let list: Space[] = [];
-    try {
-      const admin = await api.adminSpaces();
-      list = admin.spaces;
-    } catch {
+    if (user?.role === "ADMIN") {
+      try {
+        const admin = await api.adminSpaces();
+        list = admin.spaces;
+      } catch {
+        const r = await api.spaces();
+        list = r.spaces;
+      }
+    } else {
       const r = await api.spaces();
+      list = r.spaces.filter(
+        (s) => s.myAccess === "EDIT" || s.myAccess === "MANAGE"
+      );
       list = await Promise.all(
-        r.spaces.map(async (s) => {
+        list.map(async (s) => {
           const detail = await api.space(s.slug);
           return detail.space;
         })
@@ -111,9 +121,11 @@ export function AdminContentPage() {
 
   useEffect(() => {
     if (!canAccess || !editParam) return;
-    if (loadedEditRef.current === editParam) return;
-    void loadPageForEdit(editParam);
-  }, [canAccess, editParam, loadPageForEdit]);
+    const key = `${editParam}:${viewParam ?? ""}`;
+    if (loadedEditRef.current === key) return;
+    loadedEditRef.current = key;
+    void loadPageForEdit(editParam, { showHistory: viewParam === "history" });
+  }, [canAccess, editParam, viewParam, loadPageForEdit]);
 
   const selected = useMemo(
     () => spaces.find((s) => s.id === spaceId),
@@ -224,7 +236,7 @@ export function AdminContentPage() {
   }
 
   return (
-    <main className="mx-auto grid max-w-[1400px] gap-6 px-4 py-10 lg:grid-cols-[320px_1fr]">
+    <main className="mx-auto grid max-w-[1400px] gap-6 px-4 py-6 sm:py-10 lg:grid-cols-[280px_1fr] xl:grid-cols-[320px_1fr]">
       <div className="space-y-4">
         <Card>
           <CardHeader>
@@ -246,8 +258,9 @@ export function AdminContentPage() {
               ))}
             </select>
             {user?.role === "ADMIN" && (
-              <form className="flex gap-2" onSubmit={createSpace}>
+              <form className="flex min-w-0 gap-2" onSubmit={createSpace}>
                 <Input
+                  className="min-w-0 flex-1"
                   placeholder="New space name"
                   value={newSpaceName}
                   onChange={(e) => setNewSpaceName(e.target.value)}
@@ -289,22 +302,25 @@ export function AdminContentPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
-          <CardTitle>
+      <Card className="min-w-0 overflow-hidden">
+        <CardHeader className="flex flex-col items-start justify-between gap-3 space-y-0 sm:flex-row sm:flex-wrap sm:items-center">
+          <CardTitle className="min-w-0 break-words">
             {loadingPage
               ? "Loading page…"
-              : editingId
-                ? `${panelMode === "preview" ? "Preview" : "Edit"}: ${title || "Untitled"}`
-                : "Create page"}
+              : panelMode === "history" && editingId
+                ? `History: ${title || "Untitled"}`
+                : editingId
+                  ? `${panelMode === "preview" ? "Preview" : "Edit"}: ${title || "Untitled"}`
+                  : "Create page"}
           </CardTitle>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-md border border-border p-0.5">
+            <div className="flex flex-wrap rounded-md border border-border p-0.5">
               <Button
                 type="button"
                 size="sm"
                 variant={panelMode === "edit" ? "default" : "ghost"}
                 onClick={() => setPanelMode("edit")}
+                disabled={!editingId}
               >
                 <Pencil className="h-3.5 w-3.5" />
                 Edit
@@ -314,9 +330,20 @@ export function AdminContentPage() {
                 size="sm"
                 variant={panelMode === "preview" ? "default" : "ghost"}
                 onClick={() => setPanelMode("preview")}
+                disabled={!editingId}
               >
                 <Eye className="h-3.5 w-3.5" />
                 Preview
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={panelMode === "history" ? "default" : "ghost"}
+                onClick={() => setPanelMode("history")}
+                disabled={!editingId}
+              >
+                <History className="h-3.5 w-3.5" />
+                History
               </Button>
             </div>
             {livePath && editingId && (
@@ -330,13 +357,24 @@ export function AdminContentPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {panelMode === "preview" ? (
+          {panelMode === "history" && editingId ? (
+            <PageHistoryPanel
+              pageId={editingId}
+              canRestore
+              onRestored={(page) => {
+                fillForm(page);
+                setPanelMode("edit");
+                setMessage("Version restored.");
+                void loadSpaces();
+              }}
+            />
+          ) : panelMode === "preview" ? (
             <div className="space-y-4">
-              <div className="rounded-lg border border-border bg-background px-6 py-8">
+              <div className="overflow-x-auto rounded-lg border border-border bg-background px-4 py-6 sm:px-6 sm:py-8">
                 <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Reader preview
                 </p>
-                <h1 className="mb-6 font-serif text-3xl font-semibold tracking-tight">
+                <h1 className="mb-6 font-serif text-2xl font-semibold tracking-tight sm:text-3xl">
                   {title || "Untitled"}
                 </h1>
                 {content.trim() ? (
@@ -427,7 +465,7 @@ export function AdminContentPage() {
               <div className="space-y-2">
                 <Label htmlFor="content">Content</Label>
                 {loadingPage ? (
-                  <div className="flex min-h-[320px] items-center justify-center rounded-md border border-input text-sm text-muted-foreground">
+                  <div className="flex min-h-[240px] items-center justify-center rounded-md border border-input text-sm text-muted-foreground sm:min-h-[320px]">
                     Loading page content…
                   </div>
                 ) : editorType === "WYSIWYG" ? (
@@ -440,7 +478,7 @@ export function AdminContentPage() {
                 ) : (
                   <Textarea
                     id="content"
-                    className="min-h-[320px] font-mono text-sm"
+                    className="min-h-[240px] font-mono text-sm sm:min-h-[320px]"
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder={

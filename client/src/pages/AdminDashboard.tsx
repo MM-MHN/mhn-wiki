@@ -25,10 +25,10 @@ export function AdminDashboard() {
   ];
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-10">
-      <h1 className="font-serif text-3xl font-semibold">Admin</h1>
+    <main className="mx-auto max-w-[1400px] px-4 py-6 sm:py-10">
+      <h1 className="font-serif text-2xl font-semibold sm:text-3xl">Admin</h1>
       <p className="mt-2 text-muted-foreground">
-        Manage spaces, pages, users, and groups. Content is seed data — replace with yours.
+        Manage spaces, pages, users, and groups.
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -55,12 +55,42 @@ export function AdminDashboard() {
       <div className="mt-10 grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Frame roadmap</CardTitle>
+            <CardTitle>Quick Guides</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <Link className="text-primary underline-offset-4 hover:underline" to="/">
+              View Spaces
+            </Link>
+            <Link
+              className="text-primary underline-offset-4 hover:underline"
+              to="/admin/users#space-access"
+            >
+              View Space Permission access
+            </Link>
+            <Link className="text-primary underline-offset-4 hover:underline" to="/admin/pages">
+              Edit content
+            </Link>
+            <Link
+              className="text-primary underline-offset-4 hover:underline"
+              to="/admin/logs"
+            >
+              System audit logs
+            </Link>
+            <Link className="text-primary underline-offset-4 hover:underline" to="/admin/users">
+              Manage users & groups
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Tech Frame roadmap</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>✓ Spaces + nested page tree (Docmost-style)</p>
             <p>✓ Markdown / HTML editor types (Wiki.js-style switch)</p>
-            <p>✓ Roles: Admin / Editor / Viewer + groups model</p>
+            <p>✓ Roles: Admin / Editor / Viewer + space access via groups</p>
+            <p>✓ Page revision history on save</p>
             <p>✓ Light / dark mode reader UI</p>
             <p>○ Real-time collaborative WYSIWYG</p>
             <p>○ OAuth / LDAP / SAML providers</p>
@@ -68,22 +98,7 @@ export function AdminDashboard() {
             <p>○ Git sync for content backup</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick links</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            <Link className="text-primary underline-offset-4 hover:underline" to="/admin/pages">
-              Edit content
-            </Link>
-            <Link className="text-primary underline-offset-4 hover:underline" to="/admin/users">
-              Manage users & groups
-            </Link>
-            <Link className="text-primary underline-offset-4 hover:underline" to="/">
-              View reader home
-            </Link>
-          </CardContent>
-        </Card>
+
       </div>
     </main>
   );

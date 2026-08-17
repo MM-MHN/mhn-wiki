@@ -1,10 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
-import { EditorType, Role } from "@prisma/client";
+import { EditorType, PageRevisionAction, PermissionLevel, Role } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { param } from "../lib/params.js";
+import {
+  recordPageRevision,
+  revisionListSelect,
+} from "../lib/pageHistory.js";
+import { assertSpaceAccess, levelAtLeast } from "../lib/permissions.js";
+import { actorFromRequest, logSystemEvent } from "../lib/systemLog.js";
 import { AppError, asyncHandler } from "../middleware/error.js";
-import { optionalAuth, requireAuth, requireRole } from "../middleware/auth.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 
 export const pagesRouter = Router();
 
@@ -18,7 +24,7 @@ function slugify(input: string) {
 
 pagesRouter.get(
   "/by-path/:spaceSlug/:pageSlug",
-  optionalAuth,
+  requireAuth,
   asyncHandler(async (req, res) => {
     const spaceSlug = param(req, "spaceSlug");
     const pageSlug = param(req, "pageSlug");
@@ -27,21 +33,143 @@ pagesRouter.get(
       where: { slug: spaceSlug },
     });
     if (!space) throw new AppError(404, "Space not found");
-    if (space.isPrivate && !req.user) {
-      throw new AppError(401, "Sign in required");
-    }
+
+    const access = await assertSpaceAccess(
+      req.user!,
+      space,
+      PermissionLevel.VIEW
+    );
 
     const page = await prisma.page.findFirst({
       where: { spaceId: space.id, slug: pageSlug },
       include: {
         author: { select: { id: true, name: true, email: true } },
-        space: { select: { id: true, name: true, slug: true } },
+        space: {
+          select: { id: true, name: true, slug: true, isPrivate: true },
+        },
       },
     });
 
-    if (!page || (!page.published && req.user?.role === Role.VIEWER)) {
+    if (!page) throw new AppError(404, "Page not found");
+
+    if (!page.published && !levelAtLeast(access, PermissionLevel.EDIT)) {
       throw new AppError(404, "Page not found");
     }
+
+    res.json({ page, myAccess: access });
+  })
+);
+
+pagesRouter.get(
+  "/:id/history",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const page = await prisma.page.findUnique({
+      where: { id },
+      include: {
+        space: { select: { id: true, isPrivate: true } },
+      },
+    });
+    if (!page) throw new AppError(404, "Page not found");
+
+    await assertSpaceAccess(req.user!, page.space, PermissionLevel.VIEW);
+
+    const revisions = await prisma.pageRevision.findMany({
+      where: { pageId: id },
+      orderBy: { createdAt: "desc" },
+      select: revisionListSelect,
+    });
+
+    res.json({ revisions });
+  })
+);
+
+pagesRouter.get(
+  "/:id/history/:revisionId",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const revisionId = param(req, "revisionId");
+
+    const page = await prisma.page.findUnique({
+      where: { id },
+      include: {
+        space: { select: { id: true, isPrivate: true } },
+      },
+    });
+    if (!page) throw new AppError(404, "Page not found");
+
+    await assertSpaceAccess(req.user!, page.space, PermissionLevel.VIEW);
+
+    const revision = await prisma.pageRevision.findFirst({
+      where: { id: revisionId, pageId: id },
+      include: {
+        editedBy: { select: { id: true, name: true, username: true } },
+      },
+    });
+    if (!revision) throw new AppError(404, "Revision not found");
+
+    res.json({ revision });
+  })
+);
+
+pagesRouter.post(
+  "/:id/history/:revisionId/restore",
+  requireAuth,
+  requireRole(Role.ADMIN, Role.EDITOR),
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const revisionId = param(req, "revisionId");
+
+    const existing = await prisma.page.findUnique({
+      where: { id },
+      include: {
+        space: { select: { id: true, isPrivate: true } },
+      },
+    });
+    if (!existing) throw new AppError(404, "Page not found");
+
+    await assertSpaceAccess(req.user!, existing.space, PermissionLevel.EDIT);
+
+    const revision = await prisma.pageRevision.findFirst({
+      where: { id: revisionId, pageId: id },
+    });
+    if (!revision) throw new AppError(404, "Revision not found");
+
+    const page = await prisma.$transaction(async (tx) => {
+      const updated = await tx.page.update({
+        where: { id },
+        data: {
+          title: revision.title,
+          slug: revision.slug,
+          content: revision.content,
+          editorType: revision.editorType,
+          published: revision.published,
+          parentId: revision.parentId,
+          order: revision.order,
+          authorId: req.user!.id,
+        },
+      });
+
+      await recordPageRevision(
+        updated,
+        PageRevisionAction.RESTORED,
+        req.user!.id,
+        tx
+      );
+
+      return updated;
+    });
+
+    logSystemEvent({
+      category: "PAGE",
+      action: "page.restored",
+      message: `Restored page “${page.title}” from history`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "page", id: page.id, label: page.title },
+      metadata: { revisionId },
+    });
 
     res.json({ page });
   })
@@ -49,22 +177,32 @@ pagesRouter.get(
 
 pagesRouter.get(
   "/:id",
-  optionalAuth,
+  requireAuth,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const page = await prisma.page.findUnique({
       where: { id },
       include: {
         author: { select: { id: true, name: true } },
-        space: { select: { id: true, name: true, slug: true, isPrivate: true } },
+        space: {
+          select: { id: true, name: true, slug: true, isPrivate: true },
+        },
         permissions: true,
       },
     });
     if (!page) throw new AppError(404, "Page not found");
-    if (page.space.isPrivate && !req.user) {
-      throw new AppError(401, "Sign in required");
+
+    const access = await assertSpaceAccess(
+      req.user!,
+      page.space,
+      PermissionLevel.VIEW
+    );
+
+    if (!page.published && !levelAtLeast(access, PermissionLevel.EDIT)) {
+      throw new AppError(404, "Page not found");
     }
-    res.json({ page });
+
+    res.json({ page, myAccess: access });
   })
 );
 
@@ -87,18 +225,43 @@ pagesRouter.post(
     const body = pageSchema.parse(req.body);
     const slug = body.slug ? slugify(body.slug) : slugify(body.title);
 
-    const page = await prisma.page.create({
-      data: {
-        spaceId: body.spaceId,
-        parentId: body.parentId ?? null,
-        title: body.title,
-        slug,
-        content: body.content ?? "",
-        editorType: body.editorType ?? EditorType.MARKDOWN,
-        published: body.published ?? true,
-        order: body.order ?? 0,
-        authorId: req.user!.id,
-      },
+    const space = await prisma.space.findUnique({ where: { id: body.spaceId } });
+    if (!space) throw new AppError(404, "Space not found");
+
+    await assertSpaceAccess(req.user!, space, PermissionLevel.EDIT);
+
+    const page = await prisma.$transaction(async (tx) => {
+      const created = await tx.page.create({
+        data: {
+          spaceId: body.spaceId,
+          parentId: body.parentId ?? null,
+          title: body.title,
+          slug,
+          content: body.content ?? "",
+          editorType: body.editorType ?? EditorType.MARKDOWN,
+          published: body.published ?? true,
+          order: body.order ?? 0,
+          authorId: req.user!.id,
+        },
+      });
+
+      await recordPageRevision(
+        created,
+        PageRevisionAction.CREATED,
+        req.user!.id,
+        tx
+      );
+
+      return created;
+    });
+
+    logSystemEvent({
+      category: "PAGE",
+      action: "page.created",
+      message: `Created page “${page.title}”`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "page", id: page.id, label: page.title },
+      metadata: { spaceId: page.spaceId, slug: page.slug },
     });
 
     res.status(201).json({ page });
@@ -112,13 +275,46 @@ pagesRouter.patch(
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const body = pageSchema.partial().omit({ spaceId: true }).parse(req.body);
-    const page = await prisma.page.update({
+
+    const existing = await prisma.page.findUnique({
       where: { id },
-      data: {
-        ...body,
-        slug: body.slug ? slugify(body.slug) : undefined,
+      include: {
+        space: { select: { id: true, isPrivate: true } },
       },
     });
+    if (!existing) throw new AppError(404, "Page not found");
+
+    await assertSpaceAccess(req.user!, existing.space, PermissionLevel.EDIT);
+
+    const page = await prisma.$transaction(async (tx) => {
+      const updated = await tx.page.update({
+        where: { id },
+        data: {
+          ...body,
+          slug: body.slug ? slugify(body.slug) : undefined,
+          authorId: req.user!.id,
+        },
+      });
+
+      await recordPageRevision(
+        updated,
+        PageRevisionAction.UPDATED,
+        req.user!.id,
+        tx
+      );
+
+      return updated;
+    });
+
+    logSystemEvent({
+      category: "PAGE",
+      action: "page.updated",
+      message: `Updated page “${page.title}”`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "page", id: page.id, label: page.title },
+      metadata: { slug: page.slug },
+    });
+
     res.json({ page });
   })
 );
@@ -129,7 +325,27 @@ pagesRouter.delete(
   requireRole(Role.ADMIN, Role.EDITOR),
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
+    const existing = await prisma.page.findUnique({
+      where: { id },
+      include: {
+        space: { select: { id: true, isPrivate: true } },
+      },
+    });
+    if (!existing) throw new AppError(404, "Page not found");
+
+    await assertSpaceAccess(req.user!, existing.space, PermissionLevel.EDIT);
+
     await prisma.page.delete({ where: { id } });
+
+    logSystemEvent({
+      category: "PAGE",
+      action: "page.deleted",
+      message: `Deleted page “${existing.title}”`,
+      actor: actorFromRequest(req.user!),
+      target: { type: "page", id: existing.id, label: existing.title },
+      metadata: { spaceId: existing.spaceId, slug: existing.slug },
+    });
+
     res.status(204).send();
   })
 );

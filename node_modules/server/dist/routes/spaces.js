@@ -4,7 +4,7 @@ import { PermissionLevel, Role } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { param } from "../lib/params.js";
 import { AppError, asyncHandler } from "../middleware/error.js";
-import { optionalAuth, requireAuth, requireRole } from "../middleware/auth.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 export const spacesRouter = Router();
 function slugify(input) {
     return input
@@ -13,20 +13,22 @@ function slugify(input) {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
 }
-spacesRouter.get("/", optionalAuth, asyncHandler(async (req, res) => {
+spacesRouter.get("/", requireAuth, asyncHandler(async (req, res) => {
     const spaces = await prisma.space.findMany({
         orderBy: { name: "asc" },
         include: {
             _count: { select: { pages: true } },
         },
     });
-    const isAdmin = req.user?.role === Role.ADMIN;
-    const filtered = spaces.filter((s) => !s.isPrivate || isAdmin || !!req.user);
+    const isAdmin = req.user.role === Role.ADMIN;
+    const filtered = isAdmin
+        ? spaces
+        : spaces.filter((s) => !s.isPrivate);
     res.json({ spaces: filtered });
 }));
-spacesRouter.get("/:slug", optionalAuth, asyncHandler(async (req, res) => {
+spacesRouter.get("/:slug", requireAuth, asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
-    const canSeeDrafts = req.user?.role === Role.ADMIN || req.user?.role === Role.EDITOR;
+    const canSeeDrafts = req.user.role === Role.ADMIN || req.user.role === Role.EDITOR;
     const space = await prisma.space.findUnique({
         where: { slug },
         include: {
@@ -48,8 +50,8 @@ spacesRouter.get("/:slug", optionalAuth, asyncHandler(async (req, res) => {
     });
     if (!space)
         throw new AppError(404, "Space not found");
-    if (space.isPrivate && !req.user) {
-        throw new AppError(401, "Sign in to view this space");
+    if (space.isPrivate && req.user.role !== Role.ADMIN) {
+        throw new AppError(403, "You do not have access to this space");
     }
     res.json({ space });
 }));

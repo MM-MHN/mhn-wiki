@@ -74,10 +74,16 @@ export function HomePage() {
   }
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      setSpaces([]);
+      return;
+    }
+    setLoading(true);
     loadSpaces()
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user]);
 
   function openCreate() {
     setEditing(null);
@@ -152,25 +158,18 @@ export function HomePage() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-10">
-      <section className="mb-12 flex max-w-3xl flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="mb-4 flex items-center gap-3">
-            <img
-              src="/brand/logo.png"
-              alt="Mahar NET"
-              className="h-16 w-auto max-w-[220px] object-contain"
-            />
-          </div>
+    <main className="mx-auto max-w-[1400px] px-4 py-6 sm:py-10">
+      <section className="mb-8 flex flex-wrap items-end justify-between gap-4 sm:mb-12">
+        <div className="min-w-0">
           <p className="mb-3 text-sm font-medium tracking-wide text-primary uppercase">
             User manual
           </p>
-          <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">
+          <h1 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
             MHN Wiki
           </h1>
         </div>
         {isAdmin && (
-          <Button onClick={openCreate}>
+          <Button className="w-full sm:w-auto" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             New space
           </Button>
@@ -317,11 +316,14 @@ export function HomePage() {
                   }
                 />
                 Private space
+                <span className="block text-xs font-normal text-muted-foreground">
+                  Marks the space as private. Access still requires assigned users or groups.
+                </span>
               </label>
             </div>
           </div>
           {formError && <p className="text-sm text-destructive">{formError}</p>}
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col-reverse justify-end gap-2 pt-2 sm:flex-row">
             <Button type="button" variant="secondary" onClick={closeForm}>
               Cancel
             </Button>

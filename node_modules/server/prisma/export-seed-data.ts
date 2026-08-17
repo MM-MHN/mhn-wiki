@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outPath = path.join(__dirname, "seed-data.json");
 
 async function main() {
-  const [users, groups, groupMembers, spaces, spaceMembers, pages, pagePermissions, settings] =
+  const [users, groups, groupMembers, spaces, spaceMembers, pages, pagePermissions, pageRevisions, settings] =
     await Promise.all([
       prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
       prisma.group.findMany({ orderBy: { createdAt: "asc" } }),
@@ -18,6 +18,7 @@ async function main() {
       prisma.spaceMember.findMany({ orderBy: { id: "asc" } }),
       prisma.page.findMany({ orderBy: [{ spaceId: "asc" }, { order: "asc" }, { createdAt: "asc" }] }),
       prisma.pagePermission.findMany({ orderBy: { id: "asc" } }),
+      prisma.pageRevision.findMany({ orderBy: [{ pageId: "asc" }, { createdAt: "asc" }] }),
       prisma.setting.findMany({ orderBy: { key: "asc" } }),
     ]);
 
@@ -30,6 +31,7 @@ async function main() {
     spaceMembers,
     pages,
     pagePermissions,
+    pageRevisions,
     settings,
   };
 

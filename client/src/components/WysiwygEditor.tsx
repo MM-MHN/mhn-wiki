@@ -540,7 +540,7 @@ export function WysiwygEditor({
     },
     editorProps: {
       attributes: {
-        class: "prose-wiki wysiwyg-content min-h-[320px] px-4 py-3 outline-none",
+        class: "prose-wiki wysiwyg-content min-h-[240px] px-3 py-3 outline-none sm:min-h-[320px] sm:px-4",
       },
       handlePaste: (_view, event) => {
         const clipboard = event.clipboardData;
@@ -618,7 +618,7 @@ export function WysiwygEditor({
 
   if (!editor) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center rounded-md border border-input bg-card text-sm text-muted-foreground">
+      <div className="flex min-h-[240px] items-center justify-center rounded-md border border-input bg-card text-sm text-muted-foreground sm:min-h-[360px]">
         Loading editor…
       </div>
     );
@@ -629,22 +629,25 @@ export function WysiwygEditor({
 
   return (
     <div className="overflow-hidden rounded-md border border-input bg-card">
-      <EditorToolbar
-        editor={editor}
-        uploading={uploading}
-        onUploadStart={() => {
-          setUploading(true);
-          setError("");
-        }}
-        onUploadEnd={() => setUploading(false)}
-        onError={setError}
-      />
+      <div className="overflow-x-auto">
+        <EditorToolbar
+          editor={editor}
+          uploading={uploading}
+          onUploadStart={() => {
+            setUploading(true);
+            setError("");
+          }}
+          onUploadEnd={() => setUploading(false)}
+          onError={setError}
+        />
+      </div>
       <EditorContent editor={editor} />
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
-        <span>
+        <span className="hidden sm:inline">
           Click an image to select it, then Remove / Delete / Backspace. Paste,
           upload, or drag & drop also supported.
         </span>
+        <span className="sm:hidden">Paste, upload, or drag images.</span>
         <span className="flex gap-3">
           {uploading && <span className="text-primary">Uploading…</span>}
           {error && <span className="text-destructive">{error}</span>}

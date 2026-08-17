@@ -21,7 +21,7 @@ export function Dialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <button
         type="button"
         className="absolute inset-0 bg-foreground/40 backdrop-blur-[1px]"
@@ -32,7 +32,7 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative z-10 w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-lg",
+          "relative z-10 max-h-[92dvh] w-full overflow-y-auto rounded-t-lg border border-border bg-card p-4 shadow-lg sm:max-w-lg sm:rounded-lg sm:p-6",
           className
         )}
       >

@@ -4,7 +4,7 @@ import { EditorType, Role } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { param } from "../lib/params.js";
 import { AppError, asyncHandler } from "../middleware/error.js";
-import { optionalAuth, requireAuth, requireRole } from "../middleware/auth.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 export const pagesRouter = Router();
 function slugify(input) {
     return input
@@ -13,7 +13,7 @@ function slugify(input) {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
 }
-pagesRouter.get("/by-path/:spaceSlug/:pageSlug", optionalAuth, asyncHandler(async (req, res) => {
+pagesRouter.get("/by-path/:spaceSlug/:pageSlug", requireAuth, asyncHandler(async (req, res) => {
     const spaceSlug = param(req, "spaceSlug");
     const pageSlug = param(req, "pageSlug");
     const space = await prisma.space.findUnique({
@@ -21,9 +21,6 @@ pagesRouter.get("/by-path/:spaceSlug/:pageSlug", optionalAuth, asyncHandler(asyn
     });
     if (!space)
         throw new AppError(404, "Space not found");
-    if (space.isPrivate && !req.user) {
-        throw new AppError(401, "Sign in required");
-    }
     const page = await prisma.page.findFirst({
         where: { spaceId: space.id, slug: pageSlug },
         include: {
@@ -31,12 +28,15 @@ pagesRouter.get("/by-path/:spaceSlug/:pageSlug", optionalAuth, asyncHandler(asyn
             space: { select: { id: true, name: true, slug: true } },
         },
     });
-    if (!page || (!page.published && req.user?.role === Role.VIEWER)) {
+    if (!page)
+        throw new AppError(404, "Page not found");
+    const canSeeDrafts = req.user.role === Role.ADMIN || req.user.role === Role.EDITOR;
+    if (!page.published && !canSeeDrafts) {
         throw new AppError(404, "Page not found");
     }
     res.json({ page });
 }));
-pagesRouter.get("/:id", optionalAuth, asyncHandler(async (req, res) => {
+pagesRouter.get("/:id", requireAuth, asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const page = await prisma.page.findUnique({
         where: { id },
@@ -48,8 +48,9 @@ pagesRouter.get("/:id", optionalAuth, asyncHandler(async (req, res) => {
     });
     if (!page)
         throw new AppError(404, "Page not found");
-    if (page.space.isPrivate && !req.user) {
-        throw new AppError(401, "Sign in required");
+    const canSeeDrafts = req.user.role === Role.ADMIN || req.user.role === Role.EDITOR;
+    if (!page.published && !canSeeDrafts) {
+        throw new AppError(404, "Page not found");
     }
     res.json({ page });
 }));

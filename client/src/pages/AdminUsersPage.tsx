@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/auth";
-import { api, type Group, type Role, type User } from "@/lib/api";
+import {
+  api,
+  type Group,
+  type PermissionLevel,
+  type Role,
+  type Space,
+  type SpaceMember,
+  type User,
+} from "@/lib/api";
 
 type UserForm = {
   username: string;
@@ -41,10 +49,19 @@ const emptyGroupForm = (): GroupForm => ({
   memberIds: [],
 });
 
+const ACCESS_LEVELS: PermissionLevel[] = ["VIEW", "EDIT", "MANAGE"];
+
 export function AdminUsersPage() {
   const { user, loading } = useAuth();
+  const location = useLocation();
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [spaceId, setSpaceId] = useState("");
+  const [spaceMembers, setSpaceMembers] = useState<SpaceMember[]>([]);
+  const [addKind, setAddKind] = useState<"user" | "group">("group");
+  const [addTargetId, setAddTargetId] = useState("");
+  const [addLevel, setAddLevel] = useState<PermissionLevel>("VIEW");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -59,16 +76,47 @@ export function AdminUsersPage() {
   const [groupForm, setGroupForm] = useState<GroupForm>(emptyGroupForm);
   const [groupFormError, setGroupFormError] = useState("");
 
+  async function loadMembers(id: string) {
+    if (!id) {
+      setSpaceMembers([]);
+      return;
+    }
+    const { members } = await api.adminSpaceMembers(id);
+    setSpaceMembers(members);
+  }
+
   async function load() {
-    const [u, g] = await Promise.all([api.adminUsers(), api.adminGroups()]);
+    const [u, g, s] = await Promise.all([
+      api.adminUsers(),
+      api.adminGroups(),
+      api.adminSpaces(),
+    ]);
     setUsers(u.users);
     setGroups(g.groups);
+    setSpaces(s.spaces);
+    const nextSpaceId = spaceId || s.spaces[0]?.id || "";
+    setSpaceId(nextSpaceId);
+    if (nextSpaceId) await loadMembers(nextSpaceId);
   }
 
   useEffect(() => {
     if (user?.role !== "ADMIN") return;
     load().catch((e: Error) => setError(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  useEffect(() => {
+    if (user?.role !== "ADMIN" || !spaceId) return;
+    loadMembers(spaceId).catch((e: Error) => setError(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spaceId]);
+
+  useEffect(() => {
+    if (location.hash !== "#space-access") return;
+    const el = document.getElementById("space-access");
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [location.hash, loading, spaces.length]);
 
   if (loading) return null;
   if (!user || user.role !== "ADMIN") return <Navigate to="/login" replace />;
@@ -250,21 +298,92 @@ export function AdminUsersPage() {
     }));
   }
 
+  const selectedSpace = spaces.find((s) => s.id === spaceId);
+
+  async function onAddSpaceMember(e: FormEvent) {
+    e.preventDefault();
+    if (!spaceId || !addTargetId) return;
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      await api.addSpaceMember(spaceId, {
+        ...(addKind === "user"
+          ? { userId: addTargetId }
+          : { groupId: addTargetId }),
+        level: addLevel,
+      });
+      setAddTargetId("");
+      setMessage("Space access updated.");
+      await loadMembers(spaceId);
+      const s = await api.adminSpaces();
+      setSpaces(s.spaces);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add access");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onChangeMemberLevel(member: SpaceMember, level: PermissionLevel) {
+    if (!spaceId) return;
+    setError("");
+    try {
+      await api.updateSpaceMember(spaceId, member.id, { level });
+      await loadMembers(spaceId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update level");
+    }
+  }
+
+  async function onRemoveSpaceMember(member: SpaceMember) {
+    if (!spaceId) return;
+    const label = member.user?.name || member.group?.name || "member";
+    const ok = window.confirm(`Remove access for “${label}”?`);
+    if (!ok) return;
+    setError("");
+    try {
+      await api.deleteSpaceMember(spaceId, member.id);
+      setMessage("Access removed.");
+      await loadMembers(spaceId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove access");
+    }
+  }
+
+  const assignedUserIds = new Set(
+    spaceMembers.map((m) => m.userId).filter(Boolean) as string[]
+  );
+  const assignedGroupIds = new Set(
+    spaceMembers.map((m) => m.groupId).filter(Boolean) as string[]
+  );
+  const availableUsers = users.filter((u) => !assignedUserIds.has(u.id));
+  const availableGroups = groups.filter((g) => !assignedGroupIds.has(g.id));
+
   return (
-    <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-10">
+    <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-6 sm:py-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-serif text-3xl font-semibold">Users & groups</h1>
+        <div className="min-w-0">
+          <h1 className="font-serif text-2xl font-semibold sm:text-3xl">Users & groups</h1>
           <p className="mt-2 text-muted-foreground">
-            Manage accounts, roles, and membership groups (admin only).
+            Manage accounts, roles, groups, and which spaces each can access.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="secondary" onClick={openCreateGroup}>
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Button
+            type="button"
+            variant="secondary"
+            className="flex-1 sm:flex-none"
+            onClick={openCreateGroup}
+          >
             <Plus className="h-4 w-4" />
             New group
           </Button>
-          <Button type="button" onClick={openCreateUser}>
+          <Button
+            type="button"
+            className="flex-1 sm:flex-none"
+            onClick={openCreateUser}
+          >
             <Plus className="h-4 w-4" />
             New user
           </Button>
@@ -395,6 +514,161 @@ export function AdminUsersPage() {
         </Card>
       </div>
 
+      <Card id="space-access" className="scroll-mt-20">
+        <CardHeader>
+          <CardTitle>Space Permission access</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Grant users or groups VIEW / EDIT / MANAGE on a space. Only assigned
+            users and groups can see a space (admins always see all). Unassigned
+            groups and users will not see it on the home page or in navigation.
+          </p>
+
+          <div className="space-y-2">
+            <Label htmlFor="access-space">Space</Label>
+            <select
+              id="access-space"
+              className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm sm:max-w-md"
+              value={spaceId}
+              onChange={(e) => {
+                setSpaceId(e.target.value);
+                setAddTargetId("");
+              }}
+            >
+              {!spaces.length && <option value="">No spaces</option>}
+              {spaces.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                  {s.isPrivate ? " (private)" : ""}
+                </option>
+              ))}
+            </select>
+            {selectedSpace && (
+              <p className="text-xs text-muted-foreground">
+                {selectedSpace.isPrivate
+                  ? "Private — only listed members can open this space."
+                  : "Only listed members can see this space. Assign groups or users below."}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            {spaceMembers.map((m) => (
+              <div
+                key={m.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">
+                    {m.user
+                      ? `${m.user.name} (@${m.user.username})`
+                      : m.group
+                        ? `Group: ${m.group.name}`
+                        : "Unknown"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {m.user ? `User · ${m.user.role}` : "Group membership"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="h-9 rounded-md border border-input bg-card px-2 text-sm"
+                    value={m.level}
+                    onChange={(e) =>
+                      onChangeMemberLevel(
+                        m,
+                        e.target.value as PermissionLevel
+                      )
+                    }
+                  >
+                    {ACCESS_LEVELS.map((level) => (
+                      <option key={level} value={level}>
+                        {level}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="h-8 w-8"
+                    title="Remove access"
+                    onClick={() => onRemoveSpaceMember(m)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {spaceId && !spaceMembers.length && (
+              <p className="text-sm text-muted-foreground">
+                No explicit members yet. Add a user or group below.
+              </p>
+            )}
+          </div>
+
+          <form
+            className="grid grid-cols-1 gap-3 rounded-md border border-dashed border-border p-3 sm:grid-cols-2 xl:grid-cols-[7rem_minmax(0,1fr)_7rem_auto]"
+            onSubmit={onAddSpaceMember}
+          >
+            <select
+              className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+              value={addKind}
+              onChange={(e) => {
+                setAddKind(e.target.value as "user" | "group");
+                setAddTargetId("");
+              }}
+            >
+              <option value="group">Group</option>
+              <option value="user">User</option>
+            </select>
+            <select
+              className="h-10 w-full min-w-0 rounded-md border border-input bg-card px-3 text-sm"
+              value={addTargetId}
+              onChange={(e) => setAddTargetId(e.target.value)}
+              required
+            >
+              <option value="">
+                {addKind === "group" ? "Select group…" : "Select user…"}
+              </option>
+              {addKind === "group"
+                ? availableGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))
+                : availableUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} (@{u.username}) · {u.role}
+                    </option>
+                  ))}
+            </select>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+              value={addLevel}
+              onChange={(e) =>
+                setAddLevel(e.target.value as PermissionLevel)
+              }
+            >
+              {ACCESS_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  {level}
+                </option>
+              ))}
+            </select>
+            <Button
+              type="submit"
+              className="w-full xl:w-auto"
+              disabled={saving || !spaceId || !addTargetId}
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
       <Dialog
         open={userDialogOpen}
         onClose={closeUserDialog}
@@ -489,7 +763,7 @@ export function AdminUsersPage() {
           {userFormError && (
             <p className="text-sm text-destructive">{userFormError}</p>
           )}
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row">
             <Button type="button" variant="secondary" onClick={closeUserDialog}>
               Cancel
             </Button>
@@ -557,7 +831,7 @@ export function AdminUsersPage() {
           {groupFormError && (
             <p className="text-sm text-destructive">{groupFormError}</p>
           )}
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row">
             <Button type="button" variant="secondary" onClick={closeGroupDialog}>
               Cancel
             </Button>

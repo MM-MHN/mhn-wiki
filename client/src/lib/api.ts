@@ -2,6 +2,7 @@ const TOKEN_KEY = "wiki_token";
 
 export type Role = "ADMIN" | "EDITOR" | "VIEWER";
 export type EditorType = "MARKDOWN" | "WYSIWYG" | "HTML";
+export type PermissionLevel = "NONE" | "VIEW" | "EDIT" | "MANAGE";
 
 export type User = {
   id: string;
@@ -24,6 +25,16 @@ export type Group = {
   }[];
 };
 
+export type SpaceMember = {
+  id: string;
+  spaceId?: string;
+  userId?: string | null;
+  groupId?: string | null;
+  level: PermissionLevel;
+  user?: { id: string; name: string; username: string; role?: Role } | null;
+  group?: { id: string; name: string } | null;
+};
+
 export type Space = {
   id: string;
   name: string;
@@ -31,8 +42,10 @@ export type Space = {
   description?: string | null;
   icon?: string | null;
   isPrivate: boolean;
-  _count?: { pages: number };
+  myAccess?: PermissionLevel;
+  _count?: { pages: number; members?: number };
   pages?: PageNode[];
+  members?: SpaceMember[];
 };
 
 export type PageNode = {
@@ -52,6 +65,49 @@ export type Page = PageNode & {
   published: boolean;
   author?: { id: string; name: string; email?: string } | null;
   space?: { id: string; name: string; slug: string };
+};
+
+export type PageRevisionAction = "CREATED" | "UPDATED" | "RESTORED";
+
+export type PageRevisionSummary = {
+  id: string;
+  pageId: string;
+  action: PageRevisionAction;
+  title: string;
+  slug: string;
+  editorType: EditorType;
+  published: boolean;
+  parentId: string | null;
+  order: number;
+  createdAt: string;
+  editedBy?: { id: string; name: string; username: string } | null;
+};
+
+export type PageRevision = PageRevisionSummary & {
+  content: string;
+};
+
+export type SystemLogCategory =
+  | "AUTH"
+  | "SPACE"
+  | "PAGE"
+  | "USER"
+  | "GROUP"
+  | "ACCESS";
+
+export type SystemLog = {
+  id: string;
+  category: SystemLogCategory;
+  action: string;
+  message: string;
+  actorId?: string | null;
+  actorName?: string | null;
+  actorRole?: Role | null;
+  targetType?: string | null;
+  targetId?: string | null;
+  targetLabel?: string | null;
+  metadata?: string | null;
+  createdAt: string;
 };
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -111,6 +167,19 @@ export const api = {
     }),
   deletePage: (id: string) =>
     request<void>(`/api/pages/${id}`, { method: "DELETE" }),
+  pageHistory: (pageId: string) =>
+    request<{ revisions: PageRevisionSummary[] }>(
+      `/api/pages/${pageId}/history`
+    ),
+  pageRevision: (pageId: string, revisionId: string) =>
+    request<{ revision: PageRevision }>(
+      `/api/pages/${pageId}/history/${revisionId}`
+    ),
+  restorePageRevision: (pageId: string, revisionId: string) =>
+    request<{ page: Page }>(
+      `/api/pages/${pageId}/history/${revisionId}/restore`,
+      { method: "POST" }
+    ),
   uploadImage: async (file: File) => {
     const token = localStorage.getItem(TOKEN_KEY);
     const body = new FormData();
@@ -128,6 +197,25 @@ export const api = {
   },
   adminOverview: () =>
     request<{ stats: Record<string, number> }>("/api/admin/overview"),
+  adminSystemLogs: (params?: {
+    category?: SystemLogCategory;
+    q?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.category) sp.set("category", params.category);
+    if (params?.q) sp.set("q", params.q);
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    if (params?.offset != null) sp.set("offset", String(params.offset));
+    const qs = sp.toString();
+    return request<{
+      logs: SystemLog[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/api/admin/logs${qs ? `?${qs}` : ""}`);
+  },
   adminUsers: () => request<{ users: User[] }>("/api/admin/users"),
   adminGroups: () => request<{ groups: Group[] }>("/api/admin/groups"),
   adminSpaces: () => request<{ spaces: Space[] }>("/api/admin/spaces"),
@@ -183,4 +271,32 @@ export const api = {
     }),
   deleteGroup: (id: string) =>
     request<void>(`/api/admin/groups/${id}`, { method: "DELETE" }),
+  adminSpaceMembers: (spaceId: string) =>
+    request<{ members: SpaceMember[] }>(
+      `/api/admin/spaces/${spaceId}/members`
+    ),
+  addSpaceMember: (
+    spaceId: string,
+    data: { userId?: string; groupId?: string; level: PermissionLevel }
+  ) =>
+    request<{ member: SpaceMember }>(`/api/admin/spaces/${spaceId}/members`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateSpaceMember: (
+    spaceId: string,
+    memberId: string,
+    data: { level: PermissionLevel }
+  ) =>
+    request<{ member: SpaceMember }>(
+      `/api/admin/spaces/${spaceId}/members/${memberId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }
+    ),
+  deleteSpaceMember: (spaceId: string, memberId: string) =>
+    request<void>(`/api/admin/spaces/${spaceId}/members/${memberId}`, {
+      method: "DELETE",
+    }),
 };

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   PrismaClient,
   type EditorType,
+  type PageRevisionAction,
   type PermissionLevel,
   type Role,
 } from "@prisma/client";
@@ -70,6 +71,20 @@ type SeedSnapshot = {
     groupId: string | null;
     level: PermissionLevel;
   }>;
+  pageRevisions?: Array<{
+    id: string;
+    pageId: string;
+    action: string;
+    title: string;
+    slug: string;
+    content: string;
+    editorType: EditorType;
+    published: boolean;
+    parentId: string | null;
+    order: number;
+    editedById: string | null;
+    createdAt: string;
+  }>;
   settings: Array<{ id: string; key: string; value: string }>;
 };
 
@@ -106,6 +121,8 @@ async function main() {
   );
 
   await prisma.$transaction(async (tx) => {
+    await tx.systemLog.deleteMany();
+    await tx.pageRevision.deleteMany();
     await tx.pagePermission.deleteMany();
     await tx.page.deleteMany();
     await tx.spaceMember.deleteMany();
@@ -207,6 +224,25 @@ async function main() {
           userId: p.userId,
           groupId: p.groupId,
           level: p.level,
+        })),
+      });
+    }
+
+    if (data.pageRevisions?.length) {
+      await tx.pageRevision.createMany({
+        data: data.pageRevisions.map((r) => ({
+          id: r.id,
+          pageId: r.pageId,
+          action: r.action as PageRevisionAction,
+          title: r.title,
+          slug: r.slug,
+          content: r.content,
+          editorType: r.editorType,
+          published: r.published,
+          parentId: r.parentId,
+          order: r.order,
+          editedById: r.editedById,
+          createdAt: new Date(r.createdAt),
         })),
       });
     }

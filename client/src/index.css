@@ -62,15 +62,18 @@
 
   html {
     @apply scroll-smooth;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    overflow-x: hidden;
   }
 }
 
 .prose-wiki {
-  @apply max-w-none text-[1.05rem] leading-7 text-foreground;
+  @apply max-w-none overflow-x-auto text-base leading-7 text-foreground sm:text-[1.05rem];
+  overflow-wrap: anywhere;
 }
 
 .prose-wiki h1,
@@ -80,15 +83,15 @@
 }
 
 .prose-wiki h1 {
-  @apply mb-4 text-4xl font-semibold;
+  @apply mb-4 text-2xl font-semibold sm:text-4xl;
 }
 
 .prose-wiki h2 {
-  @apply mt-10 mb-3 text-2xl font-semibold;
+  @apply mt-8 mb-3 text-xl font-semibold sm:mt-10 sm:text-2xl;
 }
 
 .prose-wiki h3 {
-  @apply mt-8 mb-2 text-xl font-semibold;
+  @apply mt-6 mb-2 text-lg font-semibold sm:mt-8 sm:text-xl;
 }
 
 .prose-wiki p {
@@ -137,7 +140,7 @@
 }
 
 .prose-wiki img {
-  @apply my-4 max-w-full rounded-md;
+  @apply my-4 h-auto max-w-full rounded-md;
 }
 
 .ProseMirror img.ProseMirror-selectednode,
