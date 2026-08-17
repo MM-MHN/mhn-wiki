@@ -95,8 +95,7 @@ export function AdminSystemLogsPage() {
             </h1>
           </div>
           <p className="max-w-2xl text-muted-foreground">
-            Audit trail of sign-ins, content changes, user/group management, and
-            space access updates. Admin only.
+            Audit trail of sign-ins, content changes, user/group management, and space access updates for Admin role only.
           </p>
         </div>
         <Button

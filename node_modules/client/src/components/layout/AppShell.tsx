@@ -87,6 +87,22 @@ export function AppShell() {
             </div>
 
             <nav className="ml-auto hidden items-center gap-1 lg:flex">
+              {user?.role === "ADMIN" && (
+                <Button variant="ghost" size="sm" asChild>
+                  <NavLink to="/admin">
+                    <LayoutDashboard className="h-4 w-4" />
+                    Admin
+                  </NavLink>
+                </Button>
+              )}
+              {user?.role === "ADMIN" && (
+                <Button variant="ghost" size="sm" asChild>
+                  <NavLink to="/admin/logs">
+                    <ScrollText className="h-4 w-4" />
+                    Logs
+                  </NavLink>
+                </Button>
+              )}
               <Button variant="ghost" size="sm" asChild>
                 <NavLink
                   to="/"
@@ -97,22 +113,6 @@ export function AppShell() {
                   Spaces
                 </NavLink>
               </Button>
-              {user?.role === "ADMIN" && (
-                <Button variant="ghost" size="sm" asChild>
-                  <NavLink to="/admin/logs">
-                    <ScrollText className="h-4 w-4" />
-                    Logs
-                  </NavLink>
-                </Button>
-              )}
-              {user?.role === "ADMIN" && (
-                <Button variant="ghost" size="sm" asChild>
-                  <NavLink to="/admin">
-                    <LayoutDashboard className="h-4 w-4" />
-                    Admin
-                  </NavLink>
-                </Button>
-              )}
               {(user?.role === "ADMIN" || user?.role === "EDITOR") && (
                 <Button variant="ghost" size="sm" asChild>
                   <NavLink to="/admin/pages">
