@@ -1,24 +1,14 @@
 {
-  "name": "wiki-manual",
-  "version": "1.0.0",
   "private": true,
-  "description": "Mplus manual wiki — Wiki.js + Docmost inspired",
-  "workspaces": [
-    "server",
-    "client"
-  ],
-  "scripts": {
-    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
-    "dev:server": "npm run dev -w server",
-    "dev:client": "npm run dev -w client",
-    "build": "npm run build -w server && npm run build -w client",
-    "db:generate": "npm run db:generate -w server",
-    "db:migrate": "npm run db:migrate -w server",
-    "db:seed": "npm run db:seed -w server",
-    "db:push": "npm run db:push -w server",
-    "db:export-seed": "npm run db:export-seed -w server"
-  },
+  "name": "mhn-wiki",
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "pm2": "^5.3.0"
+  },
+  "scripts": {
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:logs": "pm2 logs",
+    "dev": "pm2 start ecosystem.config.js --no-daemon"
   }
 }
