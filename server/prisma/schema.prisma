@@ -113,7 +113,7 @@ model Page {
   slug        String
   content     String           @default("")
   editorType  EditorType       @default(MARKDOWN)
-  published   Boolean          @default(true)
+  published   Boolean          @default(false)
   order       Int              @default(0)
   authorId    String?
   createdAt   DateTime         @default(now())

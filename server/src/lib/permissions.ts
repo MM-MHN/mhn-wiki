@@ -97,3 +97,29 @@ export async function filterSpacesByAccess<
 
   return results;
 }
+
+/** Publish / hide visibility may only be changed by ADMIN. */
+export function canManagePageVisibility(user: { role: Role }): boolean {
+  return user.role === Role.ADMIN;
+}
+
+/**
+ * Who may load an unpublished (hidden) page:
+ * - ADMIN: always (space viewer + CMS)
+ * - EDITOR with EDIT access: CMS only (get-by-id), not space reader routes
+ */
+export function canAccessUnpublishedPage(
+  user: { role: Role },
+  access: PermissionLevel,
+  purpose: "read" | "edit"
+): boolean {
+  if (user.role === Role.ADMIN) return true;
+  if (
+    purpose === "edit" &&
+    user.role === Role.EDITOR &&
+    levelAtLeast(access, PermissionLevel.EDIT)
+  ) {
+    return true;
+  }
+  return false;
+}

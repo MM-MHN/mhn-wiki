@@ -7,12 +7,21 @@ import {
   type FormEvent,
 } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { Eye, ExternalLink, History, Pencil } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  ExternalLink,
+  History,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { PageHistoryPanel } from "@/components/PageHistoryPanel";
 import { PageRenderer } from "@/components/PageRenderer";
 import { WysiwygEditor } from "@/components/WysiwygEditor";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +41,7 @@ export function AdminContentPage() {
   const [content, setContent] = useState("");
   const [editorType, setEditorType] = useState<EditorType>("WYSIWYG");
   const [parentId, setParentId] = useState("");
+  const [published, setPublished] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editorKey, setEditorKey] = useState(0);
   const [loadingPage, setLoadingPage] = useState(false);
@@ -39,9 +49,13 @@ export function AdminContentPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [newSpaceName, setNewSpaceName] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
   const loadedEditRef = useRef<string | null>(null);
 
   const canAccess = user?.role === "ADMIN" || user?.role === "EDITOR";
+  const isAdmin = user?.role === "ADMIN";
   const editParam = params.get("edit");
   const viewParam = params.get("view");
 
@@ -54,6 +68,7 @@ export function AdminContentPage() {
       setContent(page.content ?? "");
       setEditorType(page.editorType || "WYSIWYG");
       setParentId(page.parentId || "");
+      setPublished(Boolean(page.published));
       setEditorKey((k) => k + 1);
       setMessage("");
       setError("");
@@ -98,7 +113,8 @@ export function AdminContentPage() {
       );
       list = await Promise.all(
         list.map(async (s) => {
-          const detail = await api.space(s.slug);
+          // manage=1 includes hidden drafts for editors in the CMS only
+          const detail = await api.space(s.slug, { manage: true });
           return detail.space;
         })
       );
@@ -152,9 +168,14 @@ export function AdminContentPage() {
           content,
           editorType,
           parentId: parentId || null,
+          ...(isAdmin ? { published } : {}),
         });
         fillForm(page, { showPreview: true });
-        setMessage("Page updated. Preview is shown below.");
+        setMessage(
+          page.published
+            ? "Page updated. Preview is shown below."
+            : "Page updated (hidden). An admin must publish it for readers."
+        );
       } else {
         const { page } = await api.createPage({
           spaceId,
@@ -163,6 +184,7 @@ export function AdminContentPage() {
           content,
           editorType,
           parentId: parentId || null,
+          ...(isAdmin ? { published } : {}),
         });
         fillForm(page, { showPreview: true });
         setParams(
@@ -173,11 +195,55 @@ export function AdminContentPage() {
           },
           { replace: true }
         );
-        setMessage("Page created. Preview is shown below.");
+        setMessage(
+          page.published
+            ? "Page created. Preview is shown below."
+            : "Page created as hidden draft. An admin must publish it before viewers/editors can see it in the space."
+        );
       }
       await loadSpaces();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
+    }
+  }
+
+  async function onToggleVisibility(next: boolean) {
+    if (!editingId || !isAdmin) return;
+    setVisibilitySaving(true);
+    setError("");
+    try {
+      const { page } = await api.updatePage(editingId, { published: next });
+      setPublished(page.published);
+      setMessage(
+        page.published
+          ? "Page published — visible to viewers and editors in this space."
+          : "Page hidden — only admins can see it in the space."
+      );
+      await loadSpaces();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not update visibility"
+      );
+    } finally {
+      setVisibilitySaving(false);
+    }
+  }
+
+  async function onConfirmDelete() {
+    if (!editingId || !isAdmin) return;
+    setDeleting(true);
+    setError("");
+    try {
+      const deletedTitle = title || "Untitled";
+      await api.deletePage(editingId);
+      setDeleteOpen(false);
+      resetForm();
+      await loadSpaces();
+      setMessage(`“${deletedTitle}” was permanently deleted.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -215,9 +281,11 @@ export function AdminContentPage() {
     setSlug("");
     setContent("");
     setParentId("");
+    setPublished(false);
     setEditorType("WYSIWYG");
     setEditorKey((k) => k + 1);
     setPanelMode("edit");
+    setDeleteOpen(false);
     setMessage("");
     setError("");
     setParams(
@@ -284,12 +352,28 @@ export function AdminContentPage() {
                 type="button"
                 onClick={() => startEdit(p.id)}
                 className={cn(
-                  "flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-muted",
+                  "flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted",
                   editingId === p.id && "bg-primary/10 text-primary"
                 )}
               >
-                <span className={p.parentId ? "pl-4" : ""}>{p.title}</span>
-                <span className="text-xs text-muted-foreground">{p.editorType}</span>
+                <span className={cn("min-w-0 truncate", p.parentId && "pl-4")}>
+                  {p.title}
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {p.published === false && (
+                    <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                      Hidden
+                    </Badge>
+                  )}
+                  {p.published && isAdmin && (
+                    <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                      Live
+                    </Badge>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {p.editorType}
+                  </span>
+                </span>
               </button>
             ))}
             {!selected?.pages?.length && (
@@ -346,12 +430,23 @@ export function AdminContentPage() {
                 History
               </Button>
             </div>
-            {livePath && editingId && (
+            {livePath && editingId && published && (
               <Button type="button" size="sm" variant="outline" asChild>
                 <Link to={livePath} target="_blank" rel="noreferrer">
                   <ExternalLink className="h-3.5 w-3.5" />
                   View live
                 </Link>
+              </Button>
+            )}
+            {isAdmin && editingId && (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
               </Button>
             )}
           </div>
@@ -462,6 +557,80 @@ export function AdminContentPage() {
                 </div>
               </div>
 
+              {isAdmin ? (
+                <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <Label htmlFor="visibility">Space visibility</Label>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Hidden topics are invisible to viewers and editors in
+                        the space. Only admins can publish or hide them.
+                      </p>
+                    </div>
+                    <Badge
+                      className={
+                        published
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                          : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                      }
+                    >
+                      {published ? "Published" : "Hidden"}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {editingId ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={published ? "outline" : "default"}
+                          disabled={loadingPage || visibilitySaving || published}
+                          onClick={() => void onToggleVisibility(true)}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          Publish
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={!published ? "outline" : "secondary"}
+                          disabled={
+                            loadingPage || visibilitySaving || !published
+                          }
+                          onClick={() => void onToggleVisibility(false)}
+                        >
+                          <EyeOff className="h-3.5 w-3.5" />
+                          Hide
+                        </Button>
+                      </>
+                    ) : (
+                      <label
+                        htmlFor="visibility"
+                        className="flex cursor-pointer items-center gap-2 text-sm"
+                      >
+                        <input
+                          id="visibility"
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-input"
+                          checked={published}
+                          disabled={loadingPage}
+                          onChange={(e) => setPublished(e.target.checked)}
+                        />
+                        Publish immediately when created
+                      </label>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  {editingId
+                    ? published
+                      ? "This page is published. Only an admin can hide it."
+                      : "This page is hidden. Only an admin can publish it for space readers."
+                    : "New pages are saved as hidden drafts until an admin publishes them."}
+                </p>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="content">Content</Label>
                 {loadingPage ? (
@@ -516,6 +685,46 @@ export function AdminContentPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={deleteOpen}
+        onClose={() => !deleting && setDeleteOpen(false)}
+        title="Permanently delete this page?"
+        description="This action cannot be undone. The page and its revision history will be removed from the database forever."
+      >
+        <div className="space-y-4">
+          <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm">
+            You are about to permanently delete{" "}
+            <span className="font-medium">“{title || "Untitled"}”</span>
+            {selected?.name ? (
+              <>
+                {" "}
+                from space <span className="font-medium">{selected.name}</span>
+              </>
+            ) : null}
+            .
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deleting}
+              onClick={() => setDeleteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void onConfirmDelete()}
+            >
+              <Trash2 className="h-4 w-4" />
+              {deleting ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </main>
   );
 }

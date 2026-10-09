@@ -27,10 +27,15 @@ spacesRouter.get(
   "/",
   requireAuth,
   asyncHandler(async (req, res) => {
+    const isAdmin = req.user!.role === Role.ADMIN;
     const spaces = await prisma.space.findMany({
       orderBy: { name: "asc" },
       include: {
-        _count: { select: { pages: true } },
+        _count: {
+          select: {
+            pages: isAdmin ? true : { where: { published: true } },
+          },
+        },
       },
     });
 
@@ -51,10 +56,30 @@ spacesRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
+    const manageMode = req.query.manage === "1";
+
+    const spaceMeta = await prisma.space.findUnique({ where: { slug } });
+    if (!spaceMeta) throw new AppError(404, "Space not found");
+
+    const myAccess = await assertSpaceAccess(
+      req.user!,
+      spaceMeta,
+      PermissionLevel.VIEW
+    );
+
+    // Reader views: only published topics for non-admins.
+    // CMS (?manage=1): editors with EDIT may list drafts they work on; only ADMIN publishes.
+    const includeHidden =
+      req.user!.role === Role.ADMIN ||
+      (manageMode &&
+        req.user!.role === Role.EDITOR &&
+        levelAtLeast(myAccess, PermissionLevel.EDIT));
+
     const space = await prisma.space.findUnique({
       where: { slug },
       include: {
         pages: {
+          where: includeHidden ? undefined : { published: true },
           orderBy: [{ order: "asc" }, { title: "asc" }],
           select: {
             id: true,
@@ -72,21 +97,9 @@ spacesRouter.get(
 
     if (!space) throw new AppError(404, "Space not found");
 
-    const myAccess = await assertSpaceAccess(
-      req.user!,
-      space,
-      PermissionLevel.VIEW
-    );
-    const canSeeDrafts = levelAtLeast(myAccess, PermissionLevel.EDIT);
-
-    const pages = canSeeDrafts
-      ? space.pages
-      : space.pages.filter((p) => p.published);
-
     res.json({
       space: {
         ...space,
-        pages,
         myAccess,
       },
     });
