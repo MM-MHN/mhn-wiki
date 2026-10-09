@@ -20,7 +20,9 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: "5mb" }));
+/** Keep in sync with client MAX_JSON_BODY_BYTES. */
+const JSON_BODY_LIMIT = "5mb";
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(morgan("dev"));
 app.use("/uploads", express.static(uploadsDir));
 

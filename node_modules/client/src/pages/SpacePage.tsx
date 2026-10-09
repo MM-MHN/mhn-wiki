@@ -143,6 +143,11 @@ export function SpacePage() {
           <article className="mx-auto max-w-3xl animate-in fade-in duration-300">
             <div className="mb-6 flex flex-wrap items-center gap-2">
               <Badge>{page.editorType || "MARKDOWN"}</Badge>
+              {page.published === false && (
+                <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                  Hidden
+                </Badge>
+              )}
               {page.author && (
                 <span className="text-xs text-muted-foreground">
                   by {page.author.name}

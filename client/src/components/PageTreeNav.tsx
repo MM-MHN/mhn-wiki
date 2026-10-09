@@ -50,9 +50,14 @@ function Node({
         )}
         <Link
           to={`/s/${spaceSlug}/${node.slug}`}
-          className="flex-1 truncate py-1.5 font-medium"
+          className="flex min-w-0 flex-1 items-center gap-1.5 truncate py-1.5 font-medium"
         >
-          {node.title}
+          <span className="truncate">{node.title}</span>
+          {node.published === false && (
+            <span className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+              Hidden
+            </span>
+          )}
         </Link>
       </div>
       {hasChildren && open && (

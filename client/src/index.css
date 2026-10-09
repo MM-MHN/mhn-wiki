@@ -76,10 +76,20 @@
   overflow-wrap: anywhere;
 }
 
+.dark .prose-wiki {
+  color: #f1f5f9; /* slate-100 */
+}
+
 .prose-wiki h1,
 .prose-wiki h2,
 .prose-wiki h3 {
   @apply font-serif tracking-tight text-foreground;
+}
+
+.dark .prose-wiki h1,
+.dark .prose-wiki h2,
+.dark .prose-wiki h3 {
+  color: #f8fafc; /* slate-50 — headings slightly brighter */
 }
 
 .prose-wiki h1 {
@@ -96,6 +106,28 @@
 
 .prose-wiki p {
   @apply my-4 text-foreground/90;
+}
+
+.dark .prose-wiki p,
+.dark .prose-wiki li,
+.dark .prose-wiki span,
+.dark .prose-wiki strong,
+.dark .prose-wiki em,
+.dark .prose-wiki u,
+.dark .prose-wiki s,
+.dark .prose-wiki td,
+.dark .prose-wiki th,
+.dark .prose-wiki blockquote {
+  /* Beat TipTap/paste inline dark colors so body text stays readable */
+  color: #f1f5f9 !important;
+}
+
+.dark .prose-wiki a {
+  color: var(--color-primary) !important;
+}
+
+.dark .prose-wiki blockquote {
+  color: #cbd5e1 !important; /* slate-300 */
 }
 
 .prose-wiki a {
@@ -177,6 +209,28 @@
 .wysiwyg-content .ProseMirror,
 .ProseMirror {
   outline: none;
+  color: var(--color-foreground);
+}
+
+.dark .wysiwyg-content .ProseMirror,
+.dark .ProseMirror {
+  color: #f1f5f9 !important; /* slate-100 — legible on dark editor surfaces */
+}
+
+.dark .wysiwyg-content .ProseMirror :where(p, li, h1, h2, h3, h4, h5, h6, span, div, td, th, strong, b, em, i, u, s, blockquote),
+.dark .ProseMirror :where(p, li, h1, h2, h3, h4, h5, h6, span, div, td, th, strong, b, em, i, u, s, blockquote) {
+  /* Override TipTap Color marks that bake in light-theme navy/black */
+  color: #f1f5f9 !important;
+}
+
+.dark .wysiwyg-content .ProseMirror a,
+.dark .ProseMirror a {
+  color: var(--color-primary) !important;
+}
+
+.dark .wysiwyg-content .ProseMirror blockquote,
+.dark .ProseMirror blockquote {
+  color: #cbd5e1 !important;
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {

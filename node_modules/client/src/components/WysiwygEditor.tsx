@@ -540,7 +540,8 @@ export function WysiwygEditor({
     },
     editorProps: {
       attributes: {
-        class: "prose-wiki wysiwyg-content min-h-[240px] px-3 py-3 outline-none sm:min-h-[320px] sm:px-4",
+        class:
+          "prose-wiki wysiwyg-content min-h-[240px] px-3 py-3 text-foreground outline-none dark:text-slate-100 sm:min-h-[320px] sm:px-4",
       },
       handlePaste: (_view, event) => {
         const clipboard = event.clipboardData;
@@ -628,7 +629,7 @@ export function WysiwygEditor({
   const words = editor.storage.characterCount?.words?.() ?? 0;
 
   return (
-    <div className="overflow-hidden rounded-md border border-input bg-card">
+    <div className="overflow-hidden rounded-md border border-input bg-card text-foreground dark:text-slate-100">
       <div className="overflow-x-auto">
         <EditorToolbar
           editor={editor}

@@ -7,7 +7,11 @@ import {
   recordPageRevision,
   revisionListSelect,
 } from "../lib/pageHistory.js";
-import { assertSpaceAccess, levelAtLeast } from "../lib/permissions.js";
+import {
+  assertSpaceAccess,
+  canAccessUnpublishedPage,
+  canManagePageVisibility,
+} from "../lib/permissions.js";
 import { actorFromRequest, logSystemEvent } from "../lib/systemLog.js";
 import { AppError, asyncHandler } from "../middleware/error.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
@@ -41,7 +45,12 @@ pagesRouter.get(
     );
 
     const page = await prisma.page.findFirst({
-      where: { spaceId: space.id, slug: pageSlug },
+      where: {
+        spaceId: space.id,
+        slug: pageSlug,
+        // Non-admins cannot retrieve hidden topics via reader API
+        ...(req.user!.role === Role.ADMIN ? {} : { published: true }),
+      },
       include: {
         author: { select: { id: true, name: true, email: true } },
         space: {
@@ -51,10 +60,6 @@ pagesRouter.get(
     });
 
     if (!page) throw new AppError(404, "Page not found");
-
-    if (!page.published && !levelAtLeast(access, PermissionLevel.EDIT)) {
-      throw new AppError(404, "Page not found");
-    }
 
     res.json({ page, myAccess: access });
   })
@@ -73,7 +78,18 @@ pagesRouter.get(
     });
     if (!page) throw new AppError(404, "Page not found");
 
-    await assertSpaceAccess(req.user!, page.space, PermissionLevel.VIEW);
+    const access = await assertSpaceAccess(
+      req.user!,
+      page.space,
+      PermissionLevel.VIEW
+    );
+
+    if (
+      !page.published &&
+      !canAccessUnpublishedPage(req.user!, access, "edit")
+    ) {
+      throw new AppError(404, "Page not found");
+    }
 
     const revisions = await prisma.pageRevision.findMany({
       where: { pageId: id },
@@ -100,7 +116,18 @@ pagesRouter.get(
     });
     if (!page) throw new AppError(404, "Page not found");
 
-    await assertSpaceAccess(req.user!, page.space, PermissionLevel.VIEW);
+    const access = await assertSpaceAccess(
+      req.user!,
+      page.space,
+      PermissionLevel.VIEW
+    );
+
+    if (
+      !page.published &&
+      !canAccessUnpublishedPage(req.user!, access, "edit")
+    ) {
+      throw new AppError(404, "Page not found");
+    }
 
     const revision = await prisma.pageRevision.findFirst({
       where: { id: revisionId, pageId: id },
@@ -145,7 +172,10 @@ pagesRouter.post(
           slug: revision.slug,
           content: revision.content,
           editorType: revision.editorType,
-          published: revision.published,
+          // Only ADMIN may change visibility via restore
+          published: canManagePageVisibility(req.user!)
+            ? revision.published
+            : existing.published,
           parentId: revision.parentId,
           order: revision.order,
           authorId: req.user!.id,
@@ -198,7 +228,10 @@ pagesRouter.get(
       PermissionLevel.VIEW
     );
 
-    if (!page.published && !levelAtLeast(access, PermissionLevel.EDIT)) {
+    if (
+      !page.published &&
+      !canAccessUnpublishedPage(req.user!, access, "edit")
+    ) {
       throw new AppError(404, "Page not found");
     }
 
@@ -230,6 +263,17 @@ pagesRouter.post(
 
     await assertSpaceAccess(req.user!, space, PermissionLevel.EDIT);
 
+    if (body.published !== undefined && !canManagePageVisibility(req.user!)) {
+      throw new AppError(
+        403,
+        "Only admins can publish or hide space content"
+      );
+    }
+
+    const published = canManagePageVisibility(req.user!)
+      ? (body.published ?? false)
+      : false;
+
     const page = await prisma.$transaction(async (tx) => {
       const created = await tx.page.create({
         data: {
@@ -239,7 +283,7 @@ pagesRouter.post(
           slug,
           content: body.content ?? "",
           editorType: body.editorType ?? EditorType.MARKDOWN,
-          published: body.published ?? true,
+          published,
           order: body.order ?? 0,
           authorId: req.user!.id,
         },
@@ -258,10 +302,14 @@ pagesRouter.post(
     logSystemEvent({
       category: "PAGE",
       action: "page.created",
-      message: `Created page “${page.title}”`,
+      message: `Created page “${page.title}”${page.published ? "" : " (hidden)"}`,
       actor: actorFromRequest(req.user!),
       target: { type: "page", id: page.id, label: page.title },
-      metadata: { spaceId: page.spaceId, slug: page.slug },
+      metadata: {
+        spaceId: page.spaceId,
+        slug: page.slug,
+        published: page.published,
+      },
     });
 
     res.status(201).json({ page });
@@ -286,14 +334,26 @@ pagesRouter.patch(
 
     await assertSpaceAccess(req.user!, existing.space, PermissionLevel.EDIT);
 
+    if (body.published !== undefined && !canManagePageVisibility(req.user!)) {
+      throw new AppError(
+        403,
+        "Only admins can publish or hide space content"
+      );
+    }
+
+    const data = {
+      ...body,
+      slug: body.slug ? slugify(body.slug) : undefined,
+      authorId: req.user!.id,
+      ...(canManagePageVisibility(req.user!)
+        ? {}
+        : { published: undefined }),
+    };
+
     const page = await prisma.$transaction(async (tx) => {
       const updated = await tx.page.update({
         where: { id },
-        data: {
-          ...body,
-          slug: body.slug ? slugify(body.slug) : undefined,
-          authorId: req.user!.id,
-        },
+        data,
       });
 
       await recordPageRevision(
@@ -306,13 +366,24 @@ pagesRouter.patch(
       return updated;
     });
 
+    const visibilityChanged =
+      body.published !== undefined && body.published !== existing.published;
+
     logSystemEvent({
       category: "PAGE",
-      action: "page.updated",
-      message: `Updated page “${page.title}”`,
+      action: visibilityChanged
+        ? body.published
+          ? "page.published"
+          : "page.hidden"
+        : "page.updated",
+      message: visibilityChanged
+        ? body.published
+          ? `Published page “${page.title}”`
+          : `Hid page “${page.title}”`
+        : `Updated page “${page.title}”`,
       actor: actorFromRequest(req.user!),
       target: { type: "page", id: page.id, label: page.title },
-      metadata: { slug: page.slug },
+      metadata: { slug: page.slug, published: page.published },
     });
 
     res.json({ page });
@@ -322,7 +393,7 @@ pagesRouter.patch(
 pagesRouter.delete(
   "/:id",
   requireAuth,
-  requireRole(Role.ADMIN, Role.EDITOR),
+  requireRole(Role.ADMIN),
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const existing = await prisma.page.findUnique({
@@ -333,14 +404,15 @@ pagesRouter.delete(
     });
     if (!existing) throw new AppError(404, "Page not found");
 
-    await assertSpaceAccess(req.user!, existing.space, PermissionLevel.EDIT);
+    await assertSpaceAccess(req.user!, existing.space, PermissionLevel.MANAGE);
 
+    // Permanent hard delete — cascades revisions & page permissions
     await prisma.page.delete({ where: { id } });
 
     logSystemEvent({
       category: "PAGE",
       action: "page.deleted",
-      message: `Deleted page “${existing.title}”`,
+      message: `Permanently deleted page “${existing.title}”`,
       actor: actorFromRequest(req.user!),
       target: { type: "page", id: existing.id, label: existing.title },
       metadata: { spaceId: existing.spaceId, slug: existing.slug },
