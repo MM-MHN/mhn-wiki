@@ -78,10 +78,11 @@ export function SpacePage() {
           "z-40 flex flex-col border-border bg-sidebar",
           "max-lg:fixed max-lg:inset-y-14 max-lg:left-0 max-lg:w-[min(20rem,88vw)] max-lg:border-r max-lg:shadow-lg max-lg:transition-transform",
           navOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full",
-          "lg:static lg:translate-x-0 lg:border-r"
+          // Desktop: pin sidebar while main article scrolls; nav list scrolls independently
+          "lg:sticky lg:top-14 lg:h-[calc(100dvh-3.5rem)] lg:translate-x-0 lg:self-start lg:border-r"
         )}
       >
-        <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-4">
+        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 py-4">
           <div className="min-w-0">
             <Link to="/" className="text-xs text-muted-foreground hover:underline">
               All spaces
@@ -102,7 +103,7 @@ export function SpacePage() {
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <PageTreeNav tree={tree} spaceSlug={spaceSlug} activeSlug={pageSlug} />
         </div>
       </aside>

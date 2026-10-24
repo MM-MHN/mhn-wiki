@@ -163,6 +163,27 @@
   @apply border border-border px-3 py-2 text-left;
 }
 
+.prose-wiki td[data-text-align="center"],
+.prose-wiki th[data-text-align="center"],
+.ProseMirror td[data-text-align="center"],
+.ProseMirror th[data-text-align="center"] {
+  text-align: center;
+}
+
+.prose-wiki td[data-text-align="right"],
+.prose-wiki th[data-text-align="right"],
+.ProseMirror td[data-text-align="right"],
+.ProseMirror th[data-text-align="right"] {
+  text-align: right;
+}
+
+.prose-wiki td[data-text-align="left"],
+.prose-wiki th[data-text-align="left"],
+.ProseMirror td[data-text-align="left"],
+.ProseMirror th[data-text-align="left"] {
+  text-align: left;
+}
+
 .prose-wiki th {
   @apply bg-muted font-medium;
 }
@@ -186,8 +207,67 @@
   cursor: pointer;
 }
 
+.ProseMirror img[width] {
+  height: auto;
+  max-width: 100%;
+}
+
+.wiki-dropcursor {
+  border-radius: 2px;
+}
+
+.wiki-block-drag-handle {
+  /* TipTap positions via transform; keep above content while dragging */
+  opacity: 0.85;
+}
+
+.wiki-block-drag-handle:hover,
+.ProseMirror-focused ~ .wiki-block-drag-handle,
+.wiki-block-drag-handle:active {
+  opacity: 1;
+}
+
+.prose-wiki img[width] {
+  height: auto;
+  max-width: 100%;
+}
+
 .prose-wiki hr {
   @apply my-8 border-border;
+}
+
+.prose-wiki details.content-group,
+.prose-wiki .content-group,
+.prose-wiki .group-container {
+  @apply my-4 overflow-hidden rounded-lg border border-border bg-muted/20;
+}
+
+/* Multi-block selection (NodeRange) — per-node highlight */
+.ProseMirror-selectednoderange {
+  border-radius: 0.375rem;
+  outline: 2px solid color-mix(in oklab, var(--color-primary) 55%, transparent);
+  outline-offset: 2px;
+  background-color: color-mix(in oklab, var(--color-primary) 8%, transparent);
+}
+
+.ProseMirror-noderangeselection *::selection {
+  background: transparent;
+}
+
+.prose-wiki details.content-group > summary {
+  @apply cursor-pointer list-none border-b border-border bg-muted/50 px-3 py-2 text-sm font-medium;
+}
+
+.prose-wiki details.content-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.prose-wiki .content-group-body {
+  @apply px-3 py-2;
+}
+
+.ProseMirror .content-group {
+  @apply my-4;
 }
 
 .prose-wiki ul[data-type="taskList"] {

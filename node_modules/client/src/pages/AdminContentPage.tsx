@@ -305,7 +305,7 @@ export function AdminContentPage() {
 
   return (
     <main className="mx-auto grid max-w-[1400px] gap-6 px-4 py-6 sm:py-10 lg:grid-cols-[280px_1fr] xl:grid-cols-[320px_1fr]">
-      <div className="space-y-4">
+      <div className="space-y-4 lg:sticky lg:top-[calc(3.5rem+1.5rem)] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
         <Card>
           <CardHeader>
             <CardTitle>Spaces</CardTitle>
