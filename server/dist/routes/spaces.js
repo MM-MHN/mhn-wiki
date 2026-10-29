@@ -3,6 +3,8 @@ import { z } from "zod";
 import { PermissionLevel, Role } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { param } from "../lib/params.js";
+import { assertSpaceAccess, filterSpacesByAccess, getSpaceAccessLevel, levelAtLeast, } from "../lib/permissions.js";
+import { actorFromRequest, logSystemEvent } from "../lib/systemLog.js";
 import { AppError, asyncHandler } from "../middleware/error.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 export const spacesRouter = Router();
@@ -14,26 +16,42 @@ function slugify(input) {
         .replace(/^-|-$/g, "");
 }
 spacesRouter.get("/", requireAuth, asyncHandler(async (req, res) => {
+    const isAdmin = req.user.role === Role.ADMIN;
     const spaces = await prisma.space.findMany({
         orderBy: { name: "asc" },
         include: {
-            _count: { select: { pages: true } },
+            _count: {
+                select: {
+                    pages: isAdmin ? true : { where: { published: true } },
+                },
+            },
         },
     });
-    const isAdmin = req.user.role === Role.ADMIN;
-    const filtered = isAdmin
-        ? spaces
-        : spaces.filter((s) => !s.isPrivate);
-    res.json({ spaces: filtered });
+    const filtered = await filterSpacesByAccess(req.user, spaces);
+    const withAccess = await Promise.all(filtered.map(async (space) => ({
+        ...space,
+        myAccess: await getSpaceAccessLevel(req.user, space),
+    })));
+    res.json({ spaces: withAccess });
 }));
 spacesRouter.get("/:slug", requireAuth, asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
-    const canSeeDrafts = req.user.role === Role.ADMIN || req.user.role === Role.EDITOR;
+    const manageMode = req.query.manage === "1";
+    const spaceMeta = await prisma.space.findUnique({ where: { slug } });
+    if (!spaceMeta)
+        throw new AppError(404, "Space not found");
+    const myAccess = await assertSpaceAccess(req.user, spaceMeta, PermissionLevel.VIEW);
+    // Reader views: only published topics for non-admins.
+    // CMS (?manage=1): editors with EDIT may list drafts they work on; only ADMIN publishes.
+    const includeHidden = req.user.role === Role.ADMIN ||
+        (manageMode &&
+            req.user.role === Role.EDITOR &&
+            levelAtLeast(myAccess, PermissionLevel.EDIT));
     const space = await prisma.space.findUnique({
         where: { slug },
         include: {
             pages: {
-                where: canSeeDrafts ? undefined : { published: true },
+                where: includeHidden ? undefined : { published: true },
                 orderBy: [{ order: "asc" }, { title: "asc" }],
                 select: {
                     id: true,
@@ -50,10 +68,12 @@ spacesRouter.get("/:slug", requireAuth, asyncHandler(async (req, res) => {
     });
     if (!space)
         throw new AppError(404, "Space not found");
-    if (space.isPrivate && req.user.role !== Role.ADMIN) {
-        throw new AppError(403, "You do not have access to this space");
-    }
-    res.json({ space });
+    res.json({
+        space: {
+            ...space,
+            myAccess,
+        },
+    });
 }));
 const spaceSchema = z.object({
     name: z.string().min(1),
@@ -80,11 +100,22 @@ spacesRouter.post("/", requireAuth, requireRole(Role.ADMIN), asyncHandler(async 
             },
         },
     });
-    res.status(201).json({ space });
+    logSystemEvent({
+        category: "SPACE",
+        action: "space.created",
+        message: `Created space “${space.name}”`,
+        actor: actorFromRequest(req.user),
+        target: { type: "space", id: space.id, label: space.name },
+        metadata: { slug: space.slug, isPrivate: space.isPrivate },
+    });
+    res.status(201).json({ space: { ...space, myAccess: PermissionLevel.MANAGE } });
 }));
 spacesRouter.patch("/:id", requireAuth, requireRole(Role.ADMIN), asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const body = spaceSchema.partial().parse(req.body);
+    const existing = await prisma.space.findUnique({ where: { id } });
+    if (!existing)
+        throw new AppError(404, "Space not found");
     const space = await prisma.space.update({
         where: { id },
         data: {
@@ -92,10 +123,29 @@ spacesRouter.patch("/:id", requireAuth, requireRole(Role.ADMIN), asyncHandler(as
             slug: body.slug ? slugify(body.slug) : undefined,
         },
     });
+    logSystemEvent({
+        category: "SPACE",
+        action: "space.updated",
+        message: `Updated space “${space.name}”`,
+        actor: actorFromRequest(req.user),
+        target: { type: "space", id: space.id, label: space.name },
+        metadata: { slug: space.slug, isPrivate: space.isPrivate },
+    });
     res.json({ space });
 }));
 spacesRouter.delete("/:id", requireAuth, requireRole(Role.ADMIN), asyncHandler(async (req, res) => {
     const id = param(req, "id");
+    const existing = await prisma.space.findUnique({ where: { id } });
+    if (!existing)
+        throw new AppError(404, "Space not found");
     await prisma.space.delete({ where: { id } });
+    logSystemEvent({
+        category: "SPACE",
+        action: "space.deleted",
+        message: `Deleted space “${existing.name}”`,
+        actor: actorFromRequest(req.user),
+        target: { type: "space", id: existing.id, label: existing.name },
+        metadata: { slug: existing.slug },
+    });
     res.status(204).send();
 }));

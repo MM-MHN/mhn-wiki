@@ -63,7 +63,7 @@ export function SpacePage() {
     space?.myAccess === "EDIT" || space?.myAccess === "MANAGE";
 
   return (
-    <div className="relative mx-auto grid min-h-[calc(100dvh-3.5rem)] max-w-[1400px] lg:grid-cols-[280px_1fr]">
+    <div className="relative mx-auto grid min-h-[calc(100dvh-3.5rem)] max-w-7xl items-stretch lg:grid-cols-[260px_1fr]">
       {navOpen && (
         <button
           type="button"
@@ -78,8 +78,8 @@ export function SpacePage() {
           "z-40 flex flex-col border-border bg-sidebar",
           "max-lg:fixed max-lg:inset-y-14 max-lg:left-0 max-lg:w-[min(20rem,88vw)] max-lg:border-r max-lg:shadow-lg max-lg:transition-transform",
           navOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full",
-          // Desktop: pin sidebar while main article scrolls; nav list scrolls independently
-          "lg:sticky lg:top-14 lg:h-[calc(100dvh-3.5rem)] lg:translate-x-0 lg:self-start lg:border-r"
+          // Desktop: stretch to main content height; page scrolls as one (no sticky / viewport lock)
+          "lg:relative lg:h-auto lg:translate-x-0 lg:self-stretch lg:border-r"
         )}
       >
         <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 py-4">
@@ -103,80 +103,93 @@ export function SpacePage() {
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div
+          className={cn(
+            "flex-1",
+            // Mobile drawer is viewport-tall — keep inner scroll there only
+            "max-lg:min-h-0 max-lg:overflow-y-auto max-lg:overscroll-contain",
+            // Desktop: no independent sidebar scrollbar
+            "lg:overflow-visible"
+          )}
+        >
           <PageTreeNav tree={tree} spaceSlug={spaceSlug} activeSlug={pageSlug} />
         </div>
       </aside>
 
-      <section className="min-w-0 px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
-        <div className="mb-4 flex items-center gap-2 lg:hidden">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setNavOpen(true)}
-          >
-            <Menu className="h-4 w-4" />
-            Pages
-          </Button>
-          {space?.name && (
-            <span className="truncate text-sm text-muted-foreground">
-              {space.name}
-            </span>
+      <section className="min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div className="mx-auto w-full max-w-5xl">
+          <div className="mb-4 flex items-center gap-2 lg:hidden">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-11 px-3"
+              onClick={() => setNavOpen(true)}
+            >
+              <Menu className="h-4 w-4" />
+              Pages
+            </Button>
+            {space?.name && (
+              <span className="truncate text-sm text-muted-foreground">
+                {space.name}
+              </span>
+            )}
+          </div>
+
+          {loading && <p className="text-muted-foreground">Loading…</p>}
+          {error && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
+              {error}
+            </div>
+          )}
+          {!loading && !error && !page && (
+            <div>
+              <h1 className="font-serif text-2xl font-semibold sm:text-3xl">
+                Empty space
+              </h1>
+              <p className="mt-2 text-muted-foreground">
+                Add pages from the admin content panel.
+              </p>
+            </div>
+          )}
+          {page && (
+            <article className="animate-in fade-in duration-300">
+              <div className="mb-6 flex flex-wrap items-center gap-2">
+                <Badge>{page.editorType || "MARKDOWN"}</Badge>
+                {page.published === false && (
+                  <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                    Hidden
+                  </Badge>
+                )}
+                {page.author && (
+                  <span className="text-xs text-muted-foreground">
+                    by {page.author.name}
+                  </span>
+                )}
+                {canEdit && (
+                  <div className="ml-auto flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/admin/pages?edit=${page.id}&view=history`}>
+                        <History className="h-3.5 w-3.5" />
+                        History
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/admin/pages?edit=${page.id}`}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <PageRenderer
+                content={page.content}
+                editorType={page.editorType || "MARKDOWN"}
+              />
+            </article>
           )}
         </div>
-
-        {loading && <p className="text-muted-foreground">Loading…</p>}
-        {error && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
-            {error}
-          </div>
-        )}
-        {!loading && !error && !page && (
-          <div>
-            <h1 className="font-serif text-2xl font-semibold sm:text-3xl">Empty space</h1>
-            <p className="mt-2 text-muted-foreground">
-              Add pages from the admin content panel.
-            </p>
-          </div>
-        )}
-        {page && (
-          <article className="mx-auto max-w-3xl animate-in fade-in duration-300">
-            <div className="mb-6 flex flex-wrap items-center gap-2">
-              <Badge>{page.editorType || "MARKDOWN"}</Badge>
-              {page.published === false && (
-                <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
-                  Hidden
-                </Badge>
-              )}
-              {page.author && (
-                <span className="text-xs text-muted-foreground">
-                  by {page.author.name}
-                </span>
-              )}
-              {canEdit && (
-                <div className="ml-auto flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/admin/pages?edit=${page.id}&view=history`}>
-                      <History className="h-3.5 w-3.5" />
-                      History
-                    </Link>
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/admin/pages?edit=${page.id}`}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      Edit
-                    </Link>
-                  </Button>
-                </div>
-              )}
-            </div>
-            <PageRenderer
-              content={page.content}
-              editorType={page.editorType || "MARKDOWN"}
-            />
-          </article>
-        )}
       </section>
     </div>
   );

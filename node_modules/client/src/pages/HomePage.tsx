@@ -158,7 +158,7 @@ export function HomePage() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-6 sm:py-10">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <section className="mb-8 flex flex-wrap items-end justify-between gap-4 sm:mb-12">
         <div className="min-w-0">
           <p className="mb-3 text-sm font-medium tracking-wide text-primary uppercase">
@@ -199,7 +199,7 @@ export function HomePage() {
                       type="button"
                       variant="secondary"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-11 w-11 sm:h-8 sm:w-8"
                       title="Edit space"
                       onClick={() => openEdit(space)}
                     >
@@ -209,7 +209,7 @@ export function HomePage() {
                       type="button"
                       variant="destructive"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-11 w-11 sm:h-8 sm:w-8"
                       title="Delete space"
                       disabled={deletingId === space.id}
                       onClick={() => onDelete(space)}

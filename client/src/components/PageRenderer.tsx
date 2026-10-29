@@ -31,7 +31,7 @@ export function PageRenderer({
     return (
       <div
         className={cn(
-          "prose-wiki wysiwyg-content text-foreground dark:text-slate-100",
+          "prose-wiki wysiwyg-content min-w-0 max-w-full text-foreground dark:text-slate-100",
           className
         )}
         dangerouslySetInnerHTML={{ __html: htmlContent }}
@@ -42,11 +42,27 @@ export function PageRenderer({
   return (
     <div
       className={cn(
-        "prose-wiki text-foreground dark:text-slate-100",
+        "prose-wiki min-w-0 max-w-full text-foreground dark:text-slate-100",
         className
       )}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          img: ({ src, alt, title }) => (
+            <img
+              src={src}
+              alt={alt || ""}
+              title={title}
+              loading="lazy"
+              decoding="async"
+              className="editor-inline-image h-auto max-w-full rounded-md object-contain"
+            />
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }

@@ -1,0 +1,86 @@
+import { PermissionLevel, Role } from "@prisma/client";
+import { AppError } from "../middleware/error.js";
+import { prisma } from "./prisma.js";
+const LEVEL_RANK = {
+    NONE: 0,
+    VIEW: 1,
+    EDIT: 2,
+    MANAGE: 3,
+};
+export function maxLevel(a, b) {
+    return LEVEL_RANK[a] >= LEVEL_RANK[b] ? a : b;
+}
+export function levelAtLeast(level, required) {
+    return LEVEL_RANK[level] >= LEVEL_RANK[required];
+}
+export async function getUserGroupIds(userId) {
+    const memberships = await prisma.groupMember.findMany({
+        where: { userId },
+        select: { groupId: true },
+    });
+    return memberships.map((m) => m.groupId);
+}
+/** Highest SpaceMember level for this user (direct or via group). */
+export async function getMembershipLevel(userId, spaceId, groupIds) {
+    const groups = groupIds ?? (await getUserGroupIds(userId));
+    const members = await prisma.spaceMember.findMany({
+        where: {
+            spaceId,
+            OR: [
+                { userId },
+                ...(groups.length ? [{ groupId: { in: groups } }] : []),
+            ],
+        },
+        select: { level: true },
+    });
+    return members.reduce((best, m) => maxLevel(best, m.level), PermissionLevel.NONE);
+}
+/**
+ * Effective access for a space:
+ * - ADMIN always MANAGE
+ * - Everyone else: only via SpaceMember (direct user or group membership)
+ */
+export async function getSpaceAccessLevel(user, space) {
+    if (user.role === Role.ADMIN)
+        return PermissionLevel.MANAGE;
+    return getMembershipLevel(user.id, space.id);
+}
+export async function assertSpaceAccess(user, space, required = PermissionLevel.VIEW) {
+    const level = await getSpaceAccessLevel(user, space);
+    if (!levelAtLeast(level, required)) {
+        throw new AppError(403, "You do not have access to this space");
+    }
+    return level;
+}
+export async function filterSpacesByAccess(user, spaces) {
+    if (user.role === Role.ADMIN)
+        return spaces;
+    const groupIds = await getUserGroupIds(user.id);
+    const results = [];
+    for (const space of spaces) {
+        const level = await getMembershipLevel(user.id, space.id, groupIds);
+        if (levelAtLeast(level, PermissionLevel.VIEW)) {
+            results.push(space);
+        }
+    }
+    return results;
+}
+/** Publish / hide visibility may only be changed by ADMIN. */
+export function canManagePageVisibility(user) {
+    return user.role === Role.ADMIN;
+}
+/**
+ * Who may load an unpublished (hidden) page:
+ * - ADMIN: always (space viewer + CMS)
+ * - EDITOR with EDIT access: CMS only (get-by-id), not space reader routes
+ */
+export function canAccessUnpublishedPage(user, access, purpose) {
+    if (user.role === Role.ADMIN)
+        return true;
+    if (purpose === "edit" &&
+        user.role === Role.EDITOR &&
+        levelAtLeast(access, PermissionLevel.EDIT)) {
+        return true;
+    }
+    return false;
+}

@@ -15,7 +15,7 @@ export function RequireAuth({
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-[1400px] px-4 py-10 text-muted-foreground">
+      <main className="mx-auto max-w-7xl px-4 py-10 text-muted-foreground sm:px-6 lg:px-8">
         Checking session…
       </main>
     );

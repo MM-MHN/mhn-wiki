@@ -23,34 +23,34 @@ function Node({
     <div>
       <div
         className={cn(
-          "group flex items-center gap-1 rounded-md pr-2 text-sm",
+          "group flex items-center gap-0.5 rounded-md pr-1 text-sm transition-colors",
           active
             ? "bg-primary/10 text-primary"
-            : "text-sidebar-foreground hover:bg-muted"
+            : "text-sidebar-foreground hover:bg-muted/80"
         )}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        style={{ paddingLeft: `${depth * 14 + 4}px` }}
       >
         {hasChildren ? (
           <button
             type="button"
-            className="rounded p-1 hover:bg-muted"
+            className="flex h-11 w-9 shrink-0 items-center justify-center rounded-md hover:bg-muted touch-manipulation"
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? "Collapse" : "Expand"}
           >
             {open ? (
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className="h-4 w-4" />
             ) : (
-              <ChevronRight className="h-3.5 w-3.5" />
+              <ChevronRight className="h-4 w-4" />
             )}
           </button>
         ) : (
-          <span className="p-1">
-            <FileText className="h-3.5 w-3.5 opacity-50" />
+          <span className="flex h-11 w-9 shrink-0 items-center justify-center opacity-50">
+            <FileText className="h-3.5 w-3.5" />
           </span>
         )}
         <Link
           to={`/s/${spaceSlug}/${node.slug}`}
-          className="flex min-w-0 flex-1 items-center gap-1.5 truncate py-1.5 font-medium"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-1.5 truncate py-2 pr-2 font-medium touch-manipulation"
         >
           <span className="truncate">{node.title}</span>
           {node.published === false && (
@@ -95,7 +95,7 @@ export function PageTreeNav({
   }
 
   return (
-    <nav className="space-y-0.5 p-2">
+    <nav className="space-y-0.5 p-2" aria-label="Pages in space">
       {tree.map((node) => (
         <Node
           key={node.id}

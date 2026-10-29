@@ -71,18 +71,6 @@ export function errorHandler(
         ...(uploaded != null ? { size: uploaded } : {}),
       });
     }
-    if (err.code === "LIMIT_FILE_COUNT") {
-      return res.status(400).json({
-        error: "Exceeds maximum allowed file count.",
-        code: err.code,
-      });
-    }
-    if (err.code === "LIMIT_UNEXPECTED_FILE") {
-      return res.status(400).json({
-        error: "Unexpected file field. Use the “file” field for uploads.",
-        code: err.code,
-      });
-    }
     return res.status(400).json({
       error: err.message || "Upload failed",
       code: err.code,

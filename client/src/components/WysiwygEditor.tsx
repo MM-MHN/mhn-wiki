@@ -8,7 +8,6 @@ import {
   type Editor,
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
@@ -40,7 +39,6 @@ import {
   Highlighter,
   ImageIcon,
   Italic,
-  Link2,
   List,
   ListOrdered,
   ListTodo,
@@ -112,18 +110,40 @@ function ToolbarDivider() {
   return <span className="mx-0.5 h-5 w-px bg-border" />;
 }
 
-function isHttpUrl(text: string) {
-  try {
-    const url = new URL(text.trim());
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 async function uploadImageFile(file: File): Promise<string> {
   const { url } = await api.uploadImage(file);
   return url;
+}
+
+/** Collect image files from a clipboard/dataTransfer, including screenshot items. */
+function collectImageFiles(
+  data: DataTransfer | null | undefined
+): File[] {
+  if (!data) return [];
+  const fromFiles = Array.from(data.files || []).filter((f) =>
+    f.type.startsWith("image/")
+  );
+  if (fromFiles.length) return fromFiles;
+
+  const fromItems: File[] = [];
+  for (const item of Array.from(data.items || [])) {
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) fromItems.push(file);
+    }
+  }
+  return fromItems;
+}
+
+/** Insert each image inline at the current caret (side-by-side when adjacent). */
+async function insertImagesFromFiles(ed: Editor, files: File[]): Promise<void> {
+  const images = files.filter((f) => f.type.startsWith("image/"));
+  if (!images.length) return;
+
+  for (const file of images) {
+    const url = await uploadImageFile(file);
+    ed.chain().focus().setImage({ src: url, alt: file.name }).run();
+  }
 }
 
 function EditorToolbar({
@@ -141,43 +161,23 @@ function EditorToolbar({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const setLink = () => {
-    const previous = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Paste or type link URL", previous || "https://");
-    if (url === null) return;
-    if (url.trim() === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-    editor
-      .chain()
-      .focus()
-      .extendMarkRange("link")
-      .setLink({ href: url.trim(), target: "_blank" })
-      .run();
-  };
-
   const addImageFromUrl = () => {
     const url = window.prompt("Paste image URL", "https://");
     if (!url?.trim()) return;
     editor.chain().focus().setImage({ src: url.trim() }).run();
   };
 
-  const removeImage = () => {
-    if (!editor.isActive("image")) return;
-    editor.chain().focus().deleteSelection().run();
-  };
-
-  const uploadFromDevice = async (file: File | null | undefined) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      onError("Please choose an image file.");
+  const uploadFromDevice = async (fileList: FileList | null | undefined) => {
+    const files = Array.from(fileList || []).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    if (!files.length) {
+      onError("Please choose image files.");
       return;
     }
     onUploadStart();
     try {
-      const url = await uploadImageFile(file);
-      editor.chain().focus().setImage({ src: url, alt: file.name }).run();
+      await insertImagesFromFiles(editor, files);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Image upload failed");
     } finally {
@@ -399,18 +399,11 @@ function EditorToolbar({
 
       <ToolbarDivider />
 
-      <ToolbarButton
-        title="Insert / paste link URL"
-        active={editor.isActive("link")}
-        onClick={setLink}
-      >
-        <Link2 className="h-4 w-4" />
-      </ToolbarButton>
       <ToolbarButton title="Insert image from URL" onClick={addImageFromUrl}>
         <ImageIcon className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        title="Upload image from device"
+        title="Add image at cursor (or paste with Ctrl/Cmd+V)"
         disabled={uploading}
         onClick={() => fileRef.current?.click()}
       >
@@ -423,7 +416,7 @@ function EditorToolbar({
       {editor.isActive("image") && (
         <ToolbarButton
           title="Remove selected image"
-          onClick={removeImage}
+          onClick={() => editor.chain().focus().deleteSelection().run()}
         >
           <Trash2 className="h-4 w-4 text-destructive" />
         </ToolbarButton>
@@ -432,9 +425,11 @@ function EditorToolbar({
         ref={fileRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
-        onChange={(e) => void uploadFromDevice(e.target.files?.[0])}
+        onChange={(e) => void uploadFromDevice(e.target.files)}
       />
+
       <ToolbarDivider />
 
       <ToolbarButton
@@ -743,12 +738,13 @@ export function WysiwygEditor({
   const editorRef = useRef<Editor | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
-  const insertUploadedImage = async (ed: Editor, file: File) => {
+  const runImageInsert = async (files: File[]) => {
+    const ed = editorRef.current;
+    if (!ed || !files.length) return;
     setUploading(true);
     setError("");
     try {
-      const url = await uploadImageFile(file);
-      ed.chain().focus().setImage({ src: url, alt: file.name }).run();
+      await insertImagesFromFiles(ed, files);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Image upload failed");
     } finally {
@@ -796,15 +792,12 @@ export function WysiwygEditor({
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-        linkOnPaste: true,
-        HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
-      }),
       ResizableImage.configure({
+        inline: true,
         allowBase64: true,
-        HTMLAttributes: { class: "rounded-md max-w-full h-auto" },
+        HTMLAttributes: {
+          class: "editor-inline-image rounded-md max-w-full h-auto object-contain",
+        },
       }),
       Placeholder.configure({ placeholder }),
       ContentGroup,
@@ -866,12 +859,22 @@ export function WysiwygEditor({
         const ed = editorRef.current;
         if (!ed) return false;
 
+        // Prefer image paste (screenshots / copied files) over other handlers
+        const imageFiles = collectImageFiles(clipboard);
+        if (imageFiles.length) {
+          event.preventDefault();
+          void runImageInsert(imageFiles);
+          return true;
+        }
+
         // Custom block clipboard from Copy / Duplicate flow
         const wikiRaw = clipboard.getData(WIKI_BLOCKS_MIME);
         if (wikiRaw) {
           try {
             const parsed = JSON.parse(wikiRaw) as JSONContent | JSONContent[];
-            const nodes = stripNodeIds(parsed);
+            const nodes = stripNodeIds(parsed).filter(
+              (n) => n.type !== "imageRow"
+            );
             if (nodes.length) {
               event.preventDefault();
               ed.chain().focus().insertContent(nodes).run();
@@ -882,66 +885,31 @@ export function WysiwygEditor({
           }
         }
 
-        const files = Array.from(clipboard.files || []).filter((f) =>
-          f.type.startsWith("image/")
-        );
-        if (files.length) {
+        // Paste plain text as plain text (no auto-link)
+        const text = clipboard.getData("text/plain");
+        const html = clipboard.getData("text/html");
+        if (text && !html && !wikiRaw) {
           event.preventDefault();
-          void (async () => {
-            for (const file of files) {
-              await insertUploadedImage(ed, file);
-            }
-          })();
-          return true;
-        }
-
-        const text = clipboard.getData("text/plain")?.trim();
-        if (text && isHttpUrl(text) && !clipboard.getData("text/html")) {
-          event.preventDefault();
-          const { empty } = ed.state.selection;
-          if (!empty) {
-            ed.chain()
-              .focus()
-              .extendMarkRange("link")
-              .setLink({ href: text, target: "_blank" })
-              .run();
-          } else {
-            ed.chain()
-              .focus()
-              .insertContent({
-                type: "text",
-                text,
-                marks: [
-                  {
-                    type: "link",
-                    attrs: {
-                      href: text,
-                      target: "_blank",
-                      rel: "noopener noreferrer",
-                    },
-                  },
-                ],
-              })
-              .run();
-          }
+          ed.chain().focus().insertContent(text).run();
           return true;
         }
 
         return false;
       },
-      handleDrop: (_view, event) => {
-        const files = Array.from(event.dataTransfer?.files || []).filter((f) =>
-          f.type.startsWith("image/")
-        );
-        if (!files.length) return false;
-        const ed = editorRef.current;
-        if (!ed) return false;
+      handleDrop: (view, event) => {
+        const imageFiles = collectImageFiles(event.dataTransfer);
+        if (!imageFiles.length) return false;
         event.preventDefault();
-        void (async () => {
-          for (const file of files) {
-            await insertUploadedImage(ed, file);
-          }
-        })();
+        // Place caret at drop coordinates so images insert beside neighbors
+        const coords = view.posAtCoords({
+          left: event.clientX,
+          top: event.clientY,
+        });
+        if (coords) {
+          const ed = editorRef.current;
+          ed?.chain().focus().setTextSelection(coords.pos).run();
+        }
+        void runImageInsert(imageFiles);
         return true;
       },
     },
@@ -1002,12 +970,10 @@ export function WysiwygEditor({
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-3 py-1.5 text-xs text-muted-foreground">
         <span className="hidden sm:inline">
-          Multi-select: Shift+drag or Shift+↑/↓. Group: Ctrl/Cmd+G · Ungroup:
-          Ctrl/Cmd+Shift+G. Undo/redo supported.
+          Click beside an image to type or paste another image next to it.
+          Shift+select · Ctrl/Cmd+G group.
         </span>
-        <span className="sm:hidden">
-          Shift+select · Ctrl/Cmd+G group · Shift+G ungroup
-        </span>
+        <span className="sm:hidden">Paste images beside cursor · Shift+select</span>
         <span className="flex gap-3">
           {uploading && <span className="text-primary">Uploading…</span>}
           {error && <span className="text-destructive">{error}</span>}

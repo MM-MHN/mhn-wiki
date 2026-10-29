@@ -72,6 +72,34 @@ export type Page = PageNode & {
   space?: { id: string; name: string; slug: string };
 };
 
+export type SearchSpaceHit = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  snippet: string;
+};
+
+export type SearchPageHit = {
+  id: string;
+  title: string;
+  slug: string;
+  published: boolean;
+  updatedAt: string;
+  spaceId: string;
+  spaceName: string;
+  spaceSlug: string;
+  snippet: string;
+  matchField: "title" | "slug" | "content";
+};
+
+export type SearchResponse = {
+  query: string;
+  spaces: SearchSpaceHit[];
+  pages: SearchPageHit[];
+};
+
 export type PageRevisionAction = "CREATED" | "UPDATED" | "RESTORED";
 
 export type PageRevisionSummary = {
@@ -265,6 +293,10 @@ export const api = {
   me: () => request<{ user: User }>("/api/auth/me"),
   settings: () => request<{ settings: Record<string, string> }>("/api/settings"),
   spaces: () => request<{ spaces: Space[] }>("/api/spaces"),
+  search: (q: string, limit = 12) =>
+    request<SearchResponse>(
+      `/api/search?q=${encodeURIComponent(q)}&limit=${limit}`
+    ),
   space: (slug: string, opts?: { manage?: boolean }) =>
     request<{ space: Space }>(
       `/api/spaces/${slug}${opts?.manage ? "?manage=1" : ""}`
@@ -326,7 +358,9 @@ export const api = {
         body,
       });
     } catch {
-      throw new Error("Network error while uploading. Check your connection and try again.");
+      throw new Error(
+        "Network error while uploading. Check your connection and try again."
+      );
     }
 
     if (!res.ok) {

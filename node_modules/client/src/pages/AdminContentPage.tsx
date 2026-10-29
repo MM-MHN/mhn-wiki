@@ -12,9 +12,12 @@ import {
   EyeOff,
   ExternalLink,
   History,
+  Menu,
   Pencil,
   Trash2,
+  X,
 } from "lucide-react";
+import { AdminPageTree } from "@/components/AdminPageTree";
 import { PageHistoryPanel } from "@/components/PageHistoryPanel";
 import { PageRenderer } from "@/components/PageRenderer";
 import { WysiwygEditor } from "@/components/WysiwygEditor";
@@ -27,7 +30,25 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/auth";
 import { api, type EditorType, type Page, type Space } from "@/lib/api";
+import { buildPageTree, type TreeNode } from "@/lib/tree";
 import { cn } from "@/lib/utils";
+
+function flattenParentOptions(
+  nodes: TreeNode[],
+  depth = 0,
+  excludeId?: string | null
+): { id: string; label: string }[] {
+  const out: { id: string; label: string }[] = [];
+  for (const n of nodes) {
+    if (n.id === excludeId) continue; // skip self and descendants
+    out.push({
+      id: n.id,
+      label: `${"— ".repeat(depth)}${n.title}`,
+    });
+    out.push(...flattenParentOptions(n.children, depth + 1, excludeId));
+  }
+  return out;
+}
 
 type PanelMode = "edit" | "preview" | "history";
 
@@ -52,6 +73,7 @@ export function AdminContentPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [visibilitySaving, setVisibilitySaving] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const loadedEditRef = useRef<string | null>(null);
 
   const canAccess = user?.role === "ADMIN" || user?.role === "EDITOR";
@@ -148,10 +170,24 @@ export function AdminContentPage() {
     [spaces, spaceId]
   );
 
+  const pageTree = useMemo(
+    () => buildPageTree(selected?.pages || []),
+    [selected?.pages]
+  );
+
+  const parentOptions = useMemo(
+    () => flattenParentOptions(pageTree, 0, editingId),
+    [pageTree, editingId]
+  );
+
   const livePath = useMemo(() => {
     if (!selected?.slug || !slug) return null;
     return `/s/${selected.slug}/${slug}`;
   }, [selected?.slug, slug]);
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [editingId, spaceId]);
 
   if (loading) return null;
   if (!user || !canAccess) return <Navigate to="/login" replace />;
@@ -303,100 +339,139 @@ export function AdminContentPage() {
     setEditorKey((k) => k + 1);
   }
 
-  return (
-    <main className="mx-auto grid max-w-[1400px] gap-6 px-4 py-6 sm:py-10 lg:grid-cols-[280px_1fr] xl:grid-cols-[320px_1fr]">
-      <div className="space-y-4 lg:sticky lg:top-[calc(3.5rem+1.5rem)] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-        <Card>
-          <CardHeader>
-            <CardTitle>Spaces</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <select
-              className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
-              value={spaceId}
-              onChange={(e) => {
-                setSpaceId(e.target.value);
-                resetForm();
-              }}
-            >
-              {spaces.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            {user?.role === "ADMIN" && (
-              <form className="flex min-w-0 gap-2" onSubmit={createSpace}>
-                <Input
-                  className="min-w-0 flex-1"
-                  placeholder="New space name"
-                  value={newSpaceName}
-                  onChange={(e) => setNewSpaceName(e.target.value)}
-                />
-                <Button type="submit" variant="secondary">
-                  Add
-                </Button>
-              </form>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Pages in space</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            {(selected?.pages || []).map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => startEdit(p.id)}
-                className={cn(
-                  "flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted",
-                  editingId === p.id && "bg-primary/10 text-primary"
-                )}
-              >
-                <span className={cn("min-w-0 truncate", p.parentId && "pl-4")}>
-                  {p.title}
-                </span>
-                <span className="flex shrink-0 items-center gap-1.5">
-                  {p.published === false && (
-                    <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
-                      Hidden
-                    </Badge>
-                  )}
-                  {p.published && isAdmin && (
-                    <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-                      Live
-                    </Badge>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    {p.editorType}
-                  </span>
-                </span>
-              </button>
+  const sidebar = (
+    <div className="space-y-4 lg:h-auto lg:self-stretch lg:overflow-visible">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle>Spaces</CardTitle>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11 shrink-0 lg:hidden"
+            aria-label="Close pages panel"
+            onClick={() => setNavOpen(false)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <select
+            className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm"
+            value={spaceId}
+            onChange={(e) => {
+              setSpaceId(e.target.value);
+              resetForm();
+            }}
+          >
+            {spaces.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
             ))}
-            {!selected?.pages?.length && (
-              <p className="text-sm text-muted-foreground">No pages yet.</p>
-            )}
-            <Button variant="outline" className="mt-2 w-full" onClick={resetForm}>
-              New page
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </select>
+          {user?.role === "ADMIN" && (
+            <form className="flex min-w-0 gap-2" onSubmit={createSpace}>
+              <Input
+                className="min-h-11 min-w-0 flex-1"
+                placeholder="New space name"
+                value={newSpaceName}
+                onChange={(e) => setNewSpaceName(e.target.value)}
+              />
+              <Button type="submit" variant="secondary" className="h-11">
+                Add
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pages in space</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Expand folders, drag handles to reorder or nest pages.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <AdminPageTree
+            pages={selected?.pages || []}
+            activeId={editingId}
+            showLiveBadge={isAdmin}
+            onSelect={(id) => {
+              startEdit(id);
+              setNavOpen(false);
+            }}
+            onChanged={async () => {
+              const list = await loadSpaces();
+              if (!editingId) return;
+              const page = list
+                .find((s) => s.id === spaceId)
+                ?.pages?.find((p) => p.id === editingId);
+              if (page) setParentId(page.parentId || "");
+            }}
+            onError={(msg) => setError(msg)}
+          />
+          <Button
+            variant="outline"
+            className="mt-2 h-11 w-full"
+            onClick={() => {
+              resetForm();
+              setNavOpen(false);
+            }}
+          >
+            New page
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  return (
+    <main className="relative mx-auto grid max-w-7xl items-stretch gap-6 px-4 py-6 sm:px-6 sm:py-10 lg:grid-cols-[260px_1fr] lg:px-8 xl:grid-cols-[280px_1fr]">
+      {navOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-foreground/40 lg:hidden"
+          aria-label="Close pages panel"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+
+      <aside
+        className={cn(
+          "z-40",
+          "max-lg:fixed max-lg:inset-y-14 max-lg:left-0 max-lg:w-[min(22rem,92vw)] max-lg:overflow-y-auto max-lg:overscroll-contain max-lg:border-r max-lg:border-border max-lg:bg-background max-lg:p-3 max-lg:shadow-lg max-lg:transition-transform",
+          navOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full",
+          "lg:relative lg:translate-x-0 lg:self-stretch"
+        )}
+      >
+        {sidebar}
+      </aside>
 
       <Card className="min-w-0 overflow-hidden">
         <CardHeader className="flex flex-col items-start justify-between gap-3 space-y-0 sm:flex-row sm:flex-wrap sm:items-center">
-          <CardTitle className="min-w-0 break-words">
-            {loadingPage
-              ? "Loading page…"
-              : panelMode === "history" && editingId
-                ? `History: ${title || "Untitled"}`
-                : editingId
-                  ? `${panelMode === "preview" ? "Preview" : "Edit"}: ${title || "Untitled"}`
-                  : "Create page"}
-          </CardTitle>
+          <div className="flex w-full min-w-0 items-start gap-2 sm:w-auto">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-11 shrink-0 px-3 lg:hidden"
+              onClick={() => setNavOpen(true)}
+            >
+              <Menu className="h-4 w-4" />
+              Pages
+            </Button>
+            <CardTitle className="min-w-0 flex-1 break-words pt-1.5 sm:pt-0">
+              {loadingPage
+                ? "Loading page…"
+                : panelMode === "history" && editingId
+                  ? `History: ${title || "Untitled"}`
+                  : editingId
+                    ? `${panelMode === "preview" ? "Preview" : "Edit"}: ${title || "Untitled"}`
+                    : "Create page"}
+            </CardTitle>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap rounded-md border border-border p-0.5">
               <Button
@@ -465,7 +540,7 @@ export function AdminContentPage() {
             />
           ) : panelMode === "preview" ? (
             <div className="space-y-4">
-              <div className="overflow-x-auto rounded-lg border border-border bg-background px-4 py-6 sm:px-6 sm:py-8">
+              <div className="overflow-x-auto rounded-lg border border-border bg-background px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
                 <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Reader preview
                 </p>
@@ -546,13 +621,11 @@ export function AdminContentPage() {
                     onChange={(e) => setParentId(e.target.value)}
                   >
                     <option value="">None (root)</option>
-                    {(selected?.pages || [])
-                      .filter((p) => p.id !== editingId)
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.title}
-                        </option>
-                      ))}
+                    {parentOptions.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

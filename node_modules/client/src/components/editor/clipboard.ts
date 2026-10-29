@@ -11,6 +11,12 @@ export function stripNodeIds(content: JSONContent | JSONContent[]): JSONContent[
       const { id: _id, ...rest } = next.attrs as Record<string, unknown>;
       next.attrs = rest;
     }
+    // Link marks are not supported — keep text only
+    if (Array.isArray(next.marks)) {
+      const marks = next.marks.filter((m) => m.type !== "link");
+      if (marks.length) next.marks = marks;
+      else delete next.marks;
+    }
     if (next.content?.length) {
       next.content = stripNodeIds(next.content);
     }
@@ -160,7 +166,7 @@ export async function pasteBlocksFromClipboard(
 
   try {
     const parsed = JSON.parse(raw) as JSONContent | JSONContent[];
-    const nodes = stripNodeIds(parsed);
+    const nodes = stripNodeIds(parsed).filter((n) => n.type !== "imageRow");
     if (!nodes.length) return false;
     return editor.chain().focus().insertContent(nodes).run();
   } catch {
