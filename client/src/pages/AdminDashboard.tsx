@@ -25,7 +25,7 @@ export function AdminDashboard() {
   ];
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-6 sm:py-10">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="font-serif text-2xl font-semibold sm:text-3xl">Admin</h1>
       <p className="mt-2 text-muted-foreground">
         Manage spaces, pages, users, and groups.

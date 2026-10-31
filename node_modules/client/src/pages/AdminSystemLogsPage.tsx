@@ -85,7 +85,7 @@ export function AdminSystemLogsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-6 sm:py-10">
+    <main className="mx-auto min-w-0 max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2">

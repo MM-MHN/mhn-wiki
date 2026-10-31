@@ -61,14 +61,10 @@ uploadsRouter.post(
             ? headerSize
             : undefined;
           return next(
-            new AppError(
-              413,
-              sizeLimitMessage(MAX_UPLOAD_BYTES, uploaded),
-              {
-                limit: MAX_UPLOAD_BYTES,
-                ...(uploaded != null ? { size: uploaded } : {}),
-              }
-            )
+            new AppError(413, sizeLimitMessage(MAX_UPLOAD_BYTES, uploaded), {
+              limit: MAX_UPLOAD_BYTES,
+              ...(uploaded != null ? { size: uploaded } : {}),
+            })
           );
         }
         if (err.code === "LIMIT_FILE_COUNT") {
@@ -82,10 +78,7 @@ uploadsRouter.post(
       }
 
       return next(
-        new AppError(
-          400,
-          err instanceof Error ? err.message : "Upload failed"
-        )
+        new AppError(400, err instanceof Error ? err.message : "Upload failed")
       );
     });
   },

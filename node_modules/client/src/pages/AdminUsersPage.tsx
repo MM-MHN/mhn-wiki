@@ -361,7 +361,7 @@ export function AdminUsersPage() {
   const availableGroups = groups.filter((g) => !assignedGroupIds.has(g.id));
 
   return (
-    <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-6 sm:py-10">
+    <main className="mx-auto min-w-0 max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="font-serif text-2xl font-semibold sm:text-3xl">Users & groups</h1>
@@ -433,7 +433,7 @@ export function AdminUsersPage() {
                     type="button"
                     variant="secondary"
                     size="icon"
-                    className="h-8 w-8"
+                    className="h-11 w-11 sm:h-8 sm:w-8"
                     title="Edit user"
                     onClick={() => openEditUser(u)}
                   >
@@ -443,7 +443,7 @@ export function AdminUsersPage() {
                     type="button"
                     variant="destructive"
                     size="icon"
-                    className="h-8 w-8"
+                    className="h-11 w-11 sm:h-8 sm:w-8"
                     title="Delete user"
                     disabled={u.id === currentUserId}
                     onClick={() => onDeleteUser(u)}
@@ -487,7 +487,7 @@ export function AdminUsersPage() {
                       type="button"
                       variant="secondary"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-11 w-11 sm:h-8 sm:w-8"
                       title="Edit group"
                       onClick={() => openEditGroup(g)}
                     >
@@ -497,7 +497,7 @@ export function AdminUsersPage() {
                       type="button"
                       variant="destructive"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-11 w-11 sm:h-8 sm:w-8"
                       title="Delete group"
                       onClick={() => onDeleteGroup(g)}
                     >
@@ -592,7 +592,7 @@ export function AdminUsersPage() {
                     type="button"
                     variant="destructive"
                     size="icon"
-                    className="h-8 w-8"
+                    className="h-11 w-11 sm:h-8 sm:w-8"
                     title="Remove access"
                     onClick={() => onRemoveSpaceMember(m)}
                   >

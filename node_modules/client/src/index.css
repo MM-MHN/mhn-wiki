@@ -69,6 +69,12 @@
     @apply bg-background text-foreground font-sans antialiased;
     overflow-x: hidden;
   }
+
+  #root {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
 }
 
 .prose-wiki {
@@ -122,16 +128,8 @@
   color: #f1f5f9 !important;
 }
 
-.dark .prose-wiki a {
-  color: var(--color-primary) !important;
-}
-
 .dark .prose-wiki blockquote {
   color: #cbd5e1 !important; /* slate-300 */
-}
-
-.prose-wiki a {
-  @apply text-primary underline underline-offset-4;
 }
 
 .prose-wiki ul {
@@ -155,12 +153,33 @@
 }
 
 .prose-wiki table {
-  @apply my-6 w-full border-collapse overflow-hidden rounded-lg text-sm;
+  @apply my-6 w-full border-collapse rounded-lg text-sm;
 }
 
 .prose-wiki th,
 .prose-wiki td {
   @apply border border-border px-3 py-2 text-left;
+}
+
+.prose-wiki td[data-text-align="center"],
+.prose-wiki th[data-text-align="center"],
+.ProseMirror td[data-text-align="center"],
+.ProseMirror th[data-text-align="center"] {
+  text-align: center;
+}
+
+.prose-wiki td[data-text-align="right"],
+.prose-wiki th[data-text-align="right"],
+.ProseMirror td[data-text-align="right"],
+.ProseMirror th[data-text-align="right"] {
+  text-align: right;
+}
+
+.prose-wiki td[data-text-align="left"],
+.prose-wiki th[data-text-align="left"],
+.ProseMirror td[data-text-align="left"],
+.ProseMirror th[data-text-align="left"] {
+  text-align: left;
 }
 
 .prose-wiki th {
@@ -171,23 +190,271 @@
   @apply my-4 border-l-4 border-primary/40 pl-4 text-muted-foreground italic;
 }
 
-.prose-wiki img {
-  @apply my-4 h-auto max-w-full rounded-md;
+/*
+ * Multi-image rows: inline figures wrap naturally with gap-like margins.
+ * On small screens each image stacks full-width to avoid horizontal scroll.
+ */
+.prose-wiki img.editor-inline-image,
+.prose-wiki p > img {
+  display: inline-block;
+  vertical-align: top;
+  width: min(100%, var(--editor-img-w, 360px));
+  max-width: 100%;
+  height: auto;
+  margin: 0.5rem 1rem 0.5rem 0;
+  border-radius: 0.5rem;
+  object-fit: contain;
+  background-color: color-mix(in oklab, var(--color-muted) 55%, transparent);
+  transition:
+    box-shadow 0.2s ease,
+    opacity 0.3s ease;
 }
 
-.ProseMirror img.ProseMirror-selectednode,
-.ProseMirror .ProseMirror-selectednode img,
-.ProseMirror .editor-image-node.ProseMirror-selectednode img {
+.prose-wiki img.editor-inline-image:hover,
+.prose-wiki figure.image-figure:hover > img {
+  box-shadow: 0 1px 3px
+    color-mix(in oklab, var(--color-foreground) 8%, transparent);
+}
+
+/*
+ * TipTap node views: vertical stack so caption stays above/below the image.
+ */
+.ProseMirror [data-node-view-wrapper].editor-image-node-root,
+.ProseMirror [data-node-view-wrapper].editor-image-node,
+.ProseMirror [data-node-view-wrapper]:has(.editor-image-node),
+.ProseMirror .editor-image-node,
+.prose-wiki figure.image-figure {
+  display: inline-flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  vertical-align: top !important;
+  width: min(100%, var(--editor-img-w, 360px));
+  max-width: 100% !important;
+  min-width: 0;
+  box-sizing: border-box !important;
+  margin: 0.5rem 1rem 0.5rem 0 !important;
+  white-space: normal !important;
+  transition:
+    outline-color 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+@media (max-width: 639px) {
+  .ProseMirror [data-node-view-wrapper].editor-image-node-root,
+  .ProseMirror [data-node-view-wrapper].editor-image-node,
+  .ProseMirror [data-node-view-wrapper]:has(.editor-image-node),
+  .ProseMirror .editor-image-node,
+  .prose-wiki figure.image-figure,
+  .prose-wiki img.editor-inline-image,
+  .prose-wiki p > img {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .prose-wiki img.editor-inline-image,
+  .prose-wiki p > img {
+    display: block !important;
+  }
+}
+
+.ProseMirror .editor-image-media {
+  position: relative;
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  line-height: 0;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background-color: color-mix(in oklab, var(--color-muted) 40%, transparent);
+}
+
+.ProseMirror .editor-image-skeleton {
+  display: block;
+  width: 100%;
+  border-radius: 0.5rem;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-muted) 70%, transparent) 0%,
+    color-mix(in oklab, var(--color-muted) 100%, transparent) 50%,
+    color-mix(in oklab, var(--color-muted) 70%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: editor-image-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes editor-image-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.ProseMirror .editor-image-caption-slot,
+.prose-wiki figure.image-figure > img,
+.prose-wiki figure.image-figure > figcaption {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: 0 0 auto !important;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.ProseMirror .editor-image-node img,
+.prose-wiki figure.image-figure > img {
+  margin: 0 !important;
+  height: auto;
+  max-width: 100%;
+  border-radius: 0.5rem;
+  object-fit: contain;
+}
+
+.ProseMirror .editor-image-caption-slot {
+  margin-top: 0.35rem;
+}
+
+.ProseMirror .editor-image-node[data-caption-position="above"] .editor-image-caption-slot,
+.prose-wiki figure.image-figure[data-caption-position="above"] > figcaption {
+  margin-top: 0;
+  margin-bottom: 0.35rem;
+  order: -1;
+}
+
+.ProseMirror .image-caption-input,
+.prose-wiki .image-caption,
+.prose-wiki figure.image-figure > figcaption {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0;
+  padding: 0.35rem 0.4rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--color-muted-foreground);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  border-radius: 0.375rem;
+  transition: background-color 0.15s ease;
+}
+
+@media (min-width: 640px) {
+  .ProseMirror .image-caption-input,
+  .prose-wiki .image-caption,
+  .prose-wiki figure.image-figure > figcaption {
+    font-size: 0.8125rem;
+    padding: 0.4rem 0.5rem;
+  }
+}
+
+.ProseMirror .image-caption-input {
+  resize: none;
+  overflow: hidden;
+  min-height: 1.4em;
+  font-family: inherit;
+  border: none;
+  background: transparent;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.ProseMirror .image-caption-input::placeholder {
+  color: color-mix(in oklab, var(--color-muted-foreground) 55%, transparent);
+  text-align: center;
+}
+
+.ProseMirror .image-caption-input:focus {
+  background: color-mix(in oklab, var(--color-muted) 55%, transparent);
+}
+
+/* Hide empty captions in published / reader view */
+.prose-wiki figure.image-figure > figcaption:empty,
+.prose-wiki .image-caption:empty {
+  display: none !important;
+}
+
+.ProseMirror .editor-image-node.is-selected {
   outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline-offset: 3px;
+  border-radius: 0.5rem;
 }
 
 .ProseMirror .editor-image-node {
-  cursor: pointer;
+  cursor: default;
+}
+
+.ProseMirror .editor-image-toolbar {
+  backdrop-filter: blur(4px);
+}
+
+.wiki-dropcursor {
+  border-radius: 2px;
+}
+
+.wiki-block-drag-handle {
+  /* TipTap positions via transform; keep above content while dragging */
+  opacity: 0.85;
+}
+
+.wiki-block-drag-handle:hover,
+.ProseMirror-focused ~ .wiki-block-drag-handle,
+.wiki-block-drag-handle:active {
+  opacity: 1;
+}
+
+.prose-wiki img[width],
+.prose-wiki img {
+  height: auto;
+  max-width: 100%;
+}
+
+.prose-wiki img:not(.editor-inline-image) {
+  border-radius: 0.5rem;
 }
 
 .prose-wiki hr {
   @apply my-8 border-border;
+}
+
+.prose-wiki details.content-group,
+.prose-wiki .content-group,
+.prose-wiki .group-container {
+  @apply my-4 overflow-hidden rounded-lg border border-border bg-muted/20;
+}
+
+/* Multi-block selection (NodeRange) — per-node highlight */
+.ProseMirror-selectednoderange {
+  border-radius: 0.375rem;
+  outline: 2px solid color-mix(in oklab, var(--color-primary) 55%, transparent);
+  outline-offset: 2px;
+  background-color: color-mix(in oklab, var(--color-primary) 8%, transparent);
+}
+
+.ProseMirror-noderangeselection *::selection {
+  background: transparent;
+}
+
+.prose-wiki details.content-group > summary {
+  @apply cursor-pointer list-none border-b border-border bg-muted/50 px-3 py-2 text-sm font-medium;
+}
+
+.prose-wiki details.content-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.prose-wiki .content-group-body {
+  @apply px-3 py-2;
+}
+
+.ProseMirror .content-group {
+  @apply my-4;
 }
 
 .prose-wiki ul[data-type="taskList"] {
@@ -223,11 +490,6 @@
   color: #f1f5f9 !important;
 }
 
-.dark .wysiwyg-content .ProseMirror a,
-.dark .ProseMirror a {
-  color: var(--color-primary) !important;
-}
-
 .dark .wysiwyg-content .ProseMirror blockquote,
 .dark .ProseMirror blockquote {
   color: #cbd5e1 !important;
@@ -245,8 +507,9 @@
   border-collapse: collapse;
   table-layout: fixed;
   width: 100%;
+  max-width: 100%;
   margin: 1.25rem 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .ProseMirror td,

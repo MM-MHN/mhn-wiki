@@ -3,11 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import multer from "multer";
+import { Role } from "@prisma/client";
+import { sizeLimitMessage } from "../lib/bytes.js";
 import { AppError, asyncHandler } from "../middleware/error.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
-import { Role } from "@prisma/client";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const uploadsDir = path.resolve(__dirname, "../../uploads");
+/** Keep in sync with client MAX_UPLOAD_BYTES. */
+export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -24,7 +27,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
     storage,
-    limits: { fileSize: 8 * 1024 * 1024 },
+    limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
     fileFilter: (_req, file, cb) => {
         if (!file.mimetype.startsWith("image/")) {
             cb(new Error("Only image uploads are allowed"));
@@ -36,10 +39,27 @@ const upload = multer({
 export const uploadsRouter = Router();
 uploadsRouter.post("/", requireAuth, requireRole(Role.ADMIN, Role.EDITOR), (req, res, next) => {
     upload.single("file")(req, res, (err) => {
-        if (err) {
+        if (!err)
+            return next();
+        if (err instanceof multer.MulterError) {
+            if (err.code === "LIMIT_FILE_SIZE") {
+                const headerSize = Number(req.headers["content-length"]);
+                const uploaded = Number.isFinite(headerSize)
+                    ? headerSize
+                    : undefined;
+                return next(new AppError(413, sizeLimitMessage(MAX_UPLOAD_BYTES, uploaded), {
+                    limit: MAX_UPLOAD_BYTES,
+                    ...(uploaded != null ? { size: uploaded } : {}),
+                }));
+            }
+            if (err.code === "LIMIT_FILE_COUNT") {
+                return next(new AppError(400, "Exceeds maximum allowed file count of 1.", {
+                    maxCount: 1,
+                }));
+            }
             return next(new AppError(400, err.message || "Upload failed"));
         }
-        next();
+        return next(new AppError(400, err instanceof Error ? err.message : "Upload failed"));
     });
 }, asyncHandler(async (req, res) => {
     if (!req.file)

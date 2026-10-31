@@ -1,15 +1,13 @@
 import { useRef, useState, type ReactNode } from "react";
+import { DragHandle } from "@tiptap/extension-drag-handle-react";
+import NodeRange from "@tiptap/extension-node-range";
+import UniqueID from "@tiptap/extension-unique-id";
 import {
   EditorContent,
-  NodeViewWrapper,
-  ReactNodeViewRenderer,
   useEditor,
   type Editor,
-  type NodeViewProps,
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
-import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
@@ -18,8 +16,6 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
-import { TableCell } from "@tiptap/extension-table-cell";
-import { TableHeader } from "@tiptap/extension-table-header";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import CharacterCount from "@tiptap/extension-character-count";
@@ -29,15 +25,20 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  ClipboardPaste,
   Code,
   Code2,
+  Copy,
+  CopyPlus,
+  Group,
+  GripVertical,
+  Ungroup,
   Heading1,
   Heading2,
   Heading3,
   Highlighter,
   ImageIcon,
   Italic,
-  Link2,
   List,
   ListOrdered,
   ListTodo,
@@ -53,9 +54,29 @@ import {
   Undo2,
   Upload,
 } from "lucide-react";
+import {
+  copySelectionToClipboard,
+  duplicateSelection,
+  pasteBlocksFromClipboard,
+  stripNodeIds,
+  writeSelectionToClipboardEvent,
+  WIKI_BLOCKS_MIME,
+} from "@/components/editor/clipboard";
+import { ContentGroup } from "@/components/editor/ContentGroup";
+import {
+  canGroup,
+  canUngroup,
+} from "@/components/editor/groupSelection";
+import { MultiSelectOutline } from "@/components/editor/MultiSelectOutline";
+import { ResizableImage } from "@/components/editor/ResizableImage";
+import {
+  CustomTableCell,
+  CustomTableHeader,
+} from "@/components/editor/tableCells";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import type { JSONContent } from "@tiptap/core";
 
 function ToolbarButton({
   onClick,
@@ -89,65 +110,41 @@ function ToolbarDivider() {
   return <span className="mx-0.5 h-5 w-px bg-border" />;
 }
 
-function isHttpUrl(text: string) {
-  try {
-    const url = new URL(text.trim());
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 async function uploadImageFile(file: File): Promise<string> {
   const { url } = await api.uploadImage(file);
   return url;
 }
 
-function ImageNodeView({ node, selected, deleteNode }: NodeViewProps) {
-  return (
-    <NodeViewWrapper
-      as="div"
-      className="editor-image-node relative my-4 inline-block max-w-full"
-      data-drag-handle
-    >
-      <img
-        src={node.attrs.src}
-        alt={node.attrs.alt || ""}
-        title={node.attrs.title || ""}
-        className={cn(
-          "block max-h-[480px] max-w-full rounded-md object-contain",
-          selected && "ring-2 ring-primary ring-offset-2 ring-offset-card"
-        )}
-        draggable={false}
-      />
-      {selected && (
-        <Button
-          type="button"
-          size="sm"
-          variant="destructive"
-          className="absolute top-2 right-2 shadow-md"
-          title="Remove image"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            deleteNode();
-          }}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Remove
-        </Button>
-      )}
-    </NodeViewWrapper>
+/** Collect image files from a clipboard/dataTransfer, including screenshot items. */
+function collectImageFiles(
+  data: DataTransfer | null | undefined
+): File[] {
+  if (!data) return [];
+  const fromFiles = Array.from(data.files || []).filter((f) =>
+    f.type.startsWith("image/")
   );
+  if (fromFiles.length) return fromFiles;
+
+  const fromItems: File[] = [];
+  for (const item of Array.from(data.items || [])) {
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) fromItems.push(file);
+    }
+  }
+  return fromItems;
 }
 
-const SelectableImage = Image.extend({
-  selectable: true,
-  draggable: true,
-  addNodeView() {
-    return ReactNodeViewRenderer(ImageNodeView);
-  },
-});
+/** Insert each image inline at the current caret (side-by-side when adjacent). */
+async function insertImagesFromFiles(ed: Editor, files: File[]): Promise<void> {
+  const images = files.filter((f) => f.type.startsWith("image/"));
+  if (!images.length) return;
+
+  for (const file of images) {
+    const url = await uploadImageFile(file);
+    ed.chain().focus().setImage({ src: url, alt: file.name }).run();
+  }
+}
 
 function EditorToolbar({
   editor,
@@ -164,43 +161,23 @@ function EditorToolbar({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const setLink = () => {
-    const previous = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Paste or type link URL", previous || "https://");
-    if (url === null) return;
-    if (url.trim() === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-    editor
-      .chain()
-      .focus()
-      .extendMarkRange("link")
-      .setLink({ href: url.trim(), target: "_blank" })
-      .run();
-  };
-
   const addImageFromUrl = () => {
     const url = window.prompt("Paste image URL", "https://");
     if (!url?.trim()) return;
     editor.chain().focus().setImage({ src: url.trim() }).run();
   };
 
-  const removeImage = () => {
-    if (!editor.isActive("image")) return;
-    editor.chain().focus().deleteSelection().run();
-  };
-
-  const uploadFromDevice = async (file: File | null | undefined) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      onError("Please choose an image file.");
+  const uploadFromDevice = async (fileList: FileList | null | undefined) => {
+    const files = Array.from(fileList || []).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    if (!files.length) {
+      onError("Please choose image files.");
       return;
     }
     onUploadStart();
     try {
-      const url = await uploadImageFile(file);
-      editor.chain().focus().setImage({ src: url, alt: file.name }).run();
+      await insertImagesFromFiles(editor, files);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Image upload failed");
     } finally {
@@ -405,17 +382,28 @@ function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarButton
-        title="Insert / paste link URL"
-        active={editor.isActive("link")}
-        onClick={setLink}
+        title="Group selected blocks (Ctrl/Cmd+G) — select 2+ with Shift+drag or Shift+↑/↓"
+        active={editor.isActive("contentGroup")}
+        disabled={!canGroup(editor)}
+        onClick={() => editor.chain().focus().groupBlocks().run()}
       >
-        <Link2 className="h-4 w-4" />
+        <Group className="h-4 w-4" />
       </ToolbarButton>
+      <ToolbarButton
+        title="Ungroup (Ctrl/Cmd+Shift+G)"
+        disabled={!canUngroup(editor)}
+        onClick={() => editor.chain().focus().ungroupBlocks().run()}
+      >
+        <Ungroup className="h-4 w-4" />
+      </ToolbarButton>
+
+      <ToolbarDivider />
+
       <ToolbarButton title="Insert image from URL" onClick={addImageFromUrl}>
         <ImageIcon className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        title="Upload image from device"
+        title="Add image at cursor (or paste with Ctrl/Cmd+V)"
         disabled={uploading}
         onClick={() => fileRef.current?.click()}
       >
@@ -428,7 +416,7 @@ function EditorToolbar({
       {editor.isActive("image") && (
         <ToolbarButton
           title="Remove selected image"
-          onClick={removeImage}
+          onClick={() => editor.chain().focus().deleteSelection().run()}
         >
           <Trash2 className="h-4 w-4 text-destructive" />
         </ToolbarButton>
@@ -437,9 +425,34 @@ function EditorToolbar({
         ref={fileRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
-        onChange={(e) => void uploadFromDevice(e.target.files?.[0])}
+        onChange={(e) => void uploadFromDevice(e.target.files)}
       />
+
+      <ToolbarDivider />
+
+      <ToolbarButton
+        title="Copy selection (Ctrl/Cmd+C)"
+        onClick={() => void copySelectionToClipboard(editor)}
+      >
+        <Copy className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton
+        title="Paste components (Ctrl/Cmd+V)"
+        onClick={() => void pasteBlocksFromClipboard(editor)}
+      >
+        <ClipboardPaste className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton
+        title="Duplicate selection / current block"
+        onClick={() => duplicateSelection(editor)}
+      >
+        <CopyPlus className="h-4 w-4" />
+      </ToolbarButton>
+
+      <ToolbarDivider />
+
       <ToolbarButton
         title="Insert table"
         active={editor.isActive("table")}
@@ -450,26 +463,263 @@ function EditorToolbar({
       {editor.isActive("table") && (
         <>
           <ToolbarButton
-            title="Add column"
+            title="Insert column left"
+            disabled={!editor.can().addColumnBefore()}
+            onClick={() => editor.chain().focus().addColumnBefore().run()}
+          >
+            <span className="text-[9px] font-semibold">Col←</span>
+          </ToolbarButton>
+          <ToolbarButton
+            title="Insert column right"
+            disabled={!editor.can().addColumnAfter()}
             onClick={() => editor.chain().focus().addColumnAfter().run()}
           >
-            <span className="text-[10px] font-semibold">+Col</span>
+            <span className="text-[9px] font-semibold">Col→</span>
           </ToolbarButton>
           <ToolbarButton
-            title="Add row"
+            title="Delete column"
+            disabled={!editor.can().deleteColumn()}
+            onClick={() => editor.chain().focus().deleteColumn().run()}
+          >
+            <span className="text-[9px] font-semibold text-destructive">
+              −Col
+            </span>
+          </ToolbarButton>
+          <ToolbarButton
+            title="Insert row above"
+            disabled={!editor.can().addRowBefore()}
+            onClick={() => editor.chain().focus().addRowBefore().run()}
+          >
+            <span className="text-[9px] font-semibold">Row↑</span>
+          </ToolbarButton>
+          <ToolbarButton
+            title="Insert row below"
+            disabled={!editor.can().addRowAfter()}
             onClick={() => editor.chain().focus().addRowAfter().run()}
           >
-            <span className="text-[10px] font-semibold">+Row</span>
+            <span className="text-[9px] font-semibold">Row↓</span>
           </ToolbarButton>
           <ToolbarButton
-            title="Delete table"
+            title="Delete row"
+            disabled={!editor.can().deleteRow()}
+            onClick={() => editor.chain().focus().deleteRow().run()}
+          >
+            <span className="text-[9px] font-semibold text-destructive">
+              −Row
+            </span>
+          </ToolbarButton>
+          <ToolbarButton
+            title="Merge selected cells"
+            disabled={!editor.can().mergeCells()}
+            onClick={() => editor.chain().focus().mergeCells().run()}
+          >
+            <span className="text-[9px] font-semibold">Merge</span>
+          </ToolbarButton>
+          <ToolbarButton
+            title="Split / unmerge cell"
+            disabled={!editor.can().splitCell()}
+            onClick={() => editor.chain().focus().splitCell().run()}
+          >
+            <span className="text-[9px] font-semibold">Split</span>
+          </ToolbarButton>
+          <ToolbarButton
+            title="Toggle header row"
+            onClick={() => editor.chain().focus().toggleHeaderRow().run()}
+          >
+            <span className="text-[9px] font-semibold">Hdr</span>
+          </ToolbarButton>
+          <ToolbarButton
+            title="Cell align left"
+            onClick={() =>
+              editor.chain().focus().setCellAttribute("textAlign", "left").run()
+            }
+          >
+            <AlignLeft className="h-3.5 w-3.5" />
+          </ToolbarButton>
+          <ToolbarButton
+            title="Cell align center"
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .setCellAttribute("textAlign", "center")
+                .run()
+            }
+          >
+            <AlignCenter className="h-3.5 w-3.5" />
+          </ToolbarButton>
+          <ToolbarButton
+            title="Cell align right"
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .setCellAttribute("textAlign", "right")
+                .run()
+            }
+          >
+            <AlignRight className="h-3.5 w-3.5" />
+          </ToolbarButton>
+          <label
+            className="flex h-8 items-center gap-1 px-1 text-xs text-muted-foreground"
+            title="Cell background color"
+          >
+            <span className="sr-only">Cell background</span>
+            <input
+              type="color"
+              className="h-6 w-6 cursor-pointer rounded border border-border bg-transparent p-0"
+              defaultValue="#e8ecf8"
+              onChange={(e) =>
+                editor
+                  .chain()
+                  .focus()
+                  .setCellAttribute("backgroundColor", e.target.value)
+                  .run()
+              }
+            />
+          </label>
+          <ToolbarButton
+            title="Clear cell background"
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .setCellAttribute("backgroundColor", null)
+                .run()
+            }
+          >
+            <span className="text-[9px] font-semibold">Bg×</span>
+          </ToolbarButton>
+          <ToolbarButton
+            title="Delete entire table"
             onClick={() => editor.chain().focus().deleteTable().run()}
           >
-            <span className="text-[10px] font-semibold">Del</span>
+            <span className="text-[9px] font-semibold text-destructive">
+              Del tbl
+            </span>
           </ToolbarButton>
         </>
       )}
     </div>
+  );
+}
+
+type ContextMenuState = {
+  x: number;
+  y: number;
+  inTable: boolean;
+} | null;
+
+function EditorContextMenu({
+  editor,
+  menu,
+  onClose,
+}: {
+  editor: Editor;
+  menu: ContextMenuState;
+  onClose: () => void;
+}) {
+  if (!menu) return null;
+
+  const item = (
+    label: string,
+    action: () => void,
+    disabled?: boolean
+  ) => (
+    <button
+      type="button"
+      disabled={disabled}
+      className="flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+      onClick={() => {
+        action();
+        onClose();
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  const groupOk = canGroup(editor);
+  const ungroupOk = canUngroup(editor);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="fixed inset-0 z-40 cursor-default"
+        aria-label="Close menu"
+        onClick={onClose}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onClose();
+        }}
+      />
+      <div
+        role="menu"
+        className="fixed z-50 min-w-[200px] rounded-md border border-border bg-card p-1 shadow-lg"
+        style={{ left: menu.x, top: menu.y }}
+      >
+        {item("Copy", () => void copySelectionToClipboard(editor))}
+        {item("Paste", () => void pasteBlocksFromClipboard(editor))}
+        {item("Duplicate", () => {
+          duplicateSelection(editor);
+        })}
+        <div className="my-1 border-t border-border" />
+        {item(
+          "Group",
+          () => editor.chain().focus().groupBlocks().run(),
+          !groupOk
+        )}
+        {item(
+          "Ungroup",
+          () => editor.chain().focus().ungroupBlocks().run(),
+          !ungroupOk
+        )}
+        {menu.inTable && (
+          <>
+            <div className="my-1 border-t border-border" />
+            {item("Insert row above", () =>
+              editor.chain().focus().addRowBefore().run()
+            )}
+            {item("Insert row below", () =>
+              editor.chain().focus().addRowAfter().run()
+            )}
+            {item("Insert column left", () =>
+              editor.chain().focus().addColumnBefore().run()
+            )}
+            {item("Insert column right", () =>
+              editor.chain().focus().addColumnAfter().run()
+            )}
+            {item(
+              "Delete row",
+              () => editor.chain().focus().deleteRow().run(),
+              !editor.can().deleteRow()
+            )}
+            {item(
+              "Delete column",
+              () => editor.chain().focus().deleteColumn().run(),
+              !editor.can().deleteColumn()
+            )}
+            {item(
+              "Merge cells",
+              () => editor.chain().focus().mergeCells().run(),
+              !editor.can().mergeCells()
+            )}
+            {item(
+              "Split / unmerge cell",
+              () => editor.chain().focus().splitCell().run(),
+              !editor.can().splitCell()
+            )}
+            {item("Toggle header row", () =>
+              editor.chain().focus().toggleHeaderRow().run()
+            )}
+            {item("Delete table", () =>
+              editor.chain().focus().deleteTable().run()
+            )}
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -484,14 +734,17 @@ export function WysiwygEditor({
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const editorRef = useRef<Editor | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
 
-  const insertUploadedImage = async (ed: Editor, file: File) => {
+  const runImageInsert = async (files: File[]) => {
+    const ed = editorRef.current;
+    if (!ed || !files.length) return;
     setUploading(true);
     setError("");
     try {
-      const url = await uploadImageFile(file);
-      ed.chain().focus().setImage({ src: url, alt: file.name }).run();
+      await insertImagesFromFiles(ed, files);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Image upload failed");
     } finally {
@@ -504,6 +757,33 @@ export function WysiwygEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
+        dropcursor: {
+          color: "var(--color-primary)",
+          width: 3,
+          class: "wiki-dropcursor",
+        },
+      }),
+      NodeRange.configure({
+        // Shift+click-drag or Shift+Arrow selects multiple sibling blocks
+        key: "Shift",
+      }),
+      UniqueID.configure({
+        attributeName: "id",
+        types: [
+          "paragraph",
+          "heading",
+          "blockquote",
+          "codeBlock",
+          "bulletList",
+          "orderedList",
+          "taskList",
+          "listItem",
+          "taskItem",
+          "horizontalRule",
+          "image",
+          "contentGroup",
+          "table",
+        ],
       }),
       Underline,
       TextStyle,
@@ -512,21 +792,19 @@ export function WysiwygEditor({
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-        linkOnPaste: true,
-        HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
-      }),
-      SelectableImage.configure({
+      ResizableImage.configure({
+        inline: true,
         allowBase64: true,
-        HTMLAttributes: { class: "rounded-md max-w-full h-auto" },
+        HTMLAttributes: {
+          class: "editor-inline-image rounded-md max-w-full h-auto object-contain",
+        },
       }),
       Placeholder.configure({ placeholder }),
+      ContentGroup,
       Table.configure({ resizable: true }),
       TableRow,
-      TableHeader,
-      TableCell,
+      CustomTableHeader,
+      CustomTableCell,
       TaskList,
       TaskItem.configure({ nested: true }),
       CharacterCount,
@@ -543,72 +821,95 @@ export function WysiwygEditor({
         class:
           "prose-wiki wysiwyg-content min-h-[240px] px-3 py-3 text-foreground outline-none dark:text-slate-100 sm:min-h-[320px] sm:px-4",
       },
+      handleDOMEvents: {
+        copy: (_view, event) => {
+          const ed = editorRef.current;
+          if (!ed) return false;
+          if (writeSelectionToClipboardEvent(ed, event)) {
+            event.preventDefault();
+            return true;
+          }
+          return false;
+        },
+        cut: (_view, event) => {
+          const ed = editorRef.current;
+          if (!ed || ed.state.selection.empty) return false;
+          if (writeSelectionToClipboardEvent(ed, event)) {
+            event.preventDefault();
+            ed.commands.deleteSelection();
+            return true;
+          }
+          return false;
+        },
+      },
+      handleKeyDown: (_view, event) => {
+        const ed = editorRef.current;
+        if (!ed) return false;
+        const mod = event.metaKey || event.ctrlKey;
+        if (mod && event.key.toLowerCase() === "d") {
+          event.preventDefault();
+          duplicateSelection(ed);
+          return true;
+        }
+        return false;
+      },
       handlePaste: (_view, event) => {
         const clipboard = event.clipboardData;
         if (!clipboard) return false;
         const ed = editorRef.current;
         if (!ed) return false;
 
-        const files = Array.from(clipboard.files || []).filter((f) =>
-          f.type.startsWith("image/")
-        );
-        if (files.length) {
+        // Prefer image paste (screenshots / copied files) over other handlers
+        const imageFiles = collectImageFiles(clipboard);
+        if (imageFiles.length) {
           event.preventDefault();
-          void (async () => {
-            for (const file of files) {
-              await insertUploadedImage(ed, file);
-            }
-          })();
+          void runImageInsert(imageFiles);
           return true;
         }
 
-        const text = clipboard.getData("text/plain")?.trim();
-        if (text && isHttpUrl(text) && !clipboard.getData("text/html")) {
-          event.preventDefault();
-          const { empty } = ed.state.selection;
-          if (!empty) {
-            ed.chain()
-              .focus()
-              .extendMarkRange("link")
-              .setLink({ href: text, target: "_blank" })
-              .run();
-          } else {
-            ed.chain()
-              .focus()
-              .insertContent({
-                type: "text",
-                text,
-                marks: [
-                  {
-                    type: "link",
-                    attrs: {
-                      href: text,
-                      target: "_blank",
-                      rel: "noopener noreferrer",
-                    },
-                  },
-                ],
-              })
-              .run();
+        // Custom block clipboard from Copy / Duplicate flow
+        const wikiRaw = clipboard.getData(WIKI_BLOCKS_MIME);
+        if (wikiRaw) {
+          try {
+            const parsed = JSON.parse(wikiRaw) as JSONContent | JSONContent[];
+            const nodes = stripNodeIds(parsed).filter(
+              (n) => n.type !== "imageRow"
+            );
+            if (nodes.length) {
+              event.preventDefault();
+              ed.chain().focus().insertContent(nodes).run();
+              return true;
+            }
+          } catch {
+            // continue
           }
+        }
+
+        // Paste plain text as plain text (no auto-link)
+        const text = clipboard.getData("text/plain");
+        const html = clipboard.getData("text/html");
+        if (text && !html && !wikiRaw) {
+          event.preventDefault();
+          ed.chain().focus().insertContent(text).run();
           return true;
         }
 
         return false;
       },
-      handleDrop: (_view, event) => {
-        const files = Array.from(event.dataTransfer?.files || []).filter((f) =>
-          f.type.startsWith("image/")
-        );
-        if (!files.length) return false;
-        const ed = editorRef.current;
-        if (!ed) return false;
+      handleDrop: (view, event) => {
+        const imageFiles = collectImageFiles(event.dataTransfer);
+        if (!imageFiles.length) return false;
         event.preventDefault();
-        void (async () => {
-          for (const file of files) {
-            await insertUploadedImage(ed, file);
-          }
-        })();
+        // Place caret at drop coordinates so images insert beside neighbors
+        const coords = view.posAtCoords({
+          left: event.clientX,
+          top: event.clientY,
+        });
+        if (coords) {
+          const ed = editorRef.current;
+          ed?.chain().focus().setTextSelection(coords.pos).run();
+        }
+        void runImageInsert(imageFiles);
         return true;
       },
     },
@@ -629,26 +930,50 @@ export function WysiwygEditor({
   const words = editor.storage.characterCount?.words?.() ?? 0;
 
   return (
-    <div className="overflow-hidden rounded-md border border-input bg-card text-foreground dark:text-slate-100">
-      <div className="overflow-x-auto">
-        <EditorToolbar
-          editor={editor}
-          uploading={uploading}
-          onUploadStart={() => {
-            setUploading(true);
-            setError("");
-          }}
-          onUploadEnd={() => setUploading(false)}
-          onError={setError}
-        />
+    <div className="flex max-h-[min(70vh,720px)] flex-col overflow-hidden rounded-md border border-input bg-card text-foreground dark:text-slate-100">
+      {/* Sticky design / formatting frame — stays visible while canvas scrolls */}
+      <div className="sticky top-0 z-20 shrink-0 border-b border-border bg-muted/80 shadow-sm backdrop-blur-sm">
+        <div className="overflow-x-auto">
+          <EditorToolbar
+            editor={editor}
+            uploading={uploading}
+            onUploadStart={() => {
+              setUploading(true);
+              setError("");
+            }}
+            onUploadEnd={() => setUploading(false)}
+            onError={setError}
+          />
+        </div>
       </div>
-      <EditorContent editor={editor} />
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+      <div
+        ref={canvasRef}
+        className="relative min-h-0 flex-1 overflow-y-auto pl-2"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            inTable: editor.isActive("table"),
+          });
+        }}
+      >
+        <EditorContent editor={editor} />
+        <MultiSelectOutline editor={editor} containerRef={canvasRef} />
+        <DragHandle
+          editor={editor}
+          className="wiki-block-drag-handle absolute z-10 flex h-7 w-6 cursor-grab items-center justify-center rounded-md border border-border bg-card text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground active:cursor-grabbing"
+        >
+          <GripVertical className="h-4 w-4" aria-hidden="true" />
+          <span className="sr-only">Drag to reorder block</span>
+        </DragHandle>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-3 py-1.5 text-xs text-muted-foreground">
         <span className="hidden sm:inline">
-          Click an image to select it, then Remove / Delete / Backspace. Paste,
-          upload, or drag & drop also supported.
+          Click beside an image to type or paste another image next to it.
+          Shift+select · Ctrl/Cmd+G group.
         </span>
-        <span className="sm:hidden">Paste, upload, or drag images.</span>
+        <span className="sm:hidden">Paste images beside cursor · Shift+select</span>
         <span className="flex gap-3">
           {uploading && <span className="text-primary">Uploading…</span>}
           {error && <span className="text-destructive">{error}</span>}
@@ -656,6 +981,11 @@ export function WysiwygEditor({
           <span>{chars} characters</span>
         </span>
       </div>
+      <EditorContextMenu
+        editor={editor}
+        menu={contextMenu}
+        onClose={() => setContextMenu(null)}
+      />
     </div>
   );
 }
